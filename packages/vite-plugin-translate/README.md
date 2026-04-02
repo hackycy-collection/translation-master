@@ -3,7 +3,7 @@
 [![npm version][npm-version-src]][npm-version-href]
 [![npm downloads][npm-downloads-src]][npm-downloads-href]
 
-Vite plugin for [translate](https://github.com/xnx3/translate)
+Vite plugin for [translate.js](https://github.com/xnx3/translate)
 
 ## Install
 
