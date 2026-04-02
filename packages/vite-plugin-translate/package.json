@@ -2,7 +2,7 @@
   "name": "vite-plugin-translate",
   "type": "module",
   "version": "0.0.1",
-  "description": "_description_",
+  "description": "Vite plugin for translate.js",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
   "homepage": "https://github.com/hackycy-collection/vite-plugin-translate#readme",
