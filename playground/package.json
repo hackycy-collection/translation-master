@@ -1,0 +1,13 @@
+{
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite"
+  },
+  "devDependencies": {
+    "vite": "catalog:cli",
+    "vite-plugin-inspect": "^11.1.0",
+    "vite-plugin-translate": "workspace:^"
+  }
+}

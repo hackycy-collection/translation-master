@@ -1,26 +1,28 @@
 {
-  "name": "pkg-placeholder",
+  "name": "vite-plugin-translate",
   "type": "module",
   "version": "0.0.0",
   "description": "_description_",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
-  "homepage": "https://github.com/hackycy/pkg-placeholder#readme",
+  "homepage": "https://github.com/hackycy-collection/vite-plugin-translate#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hackycy/pkg-placeholder.git"
+    "url": "git+https://github.com/hackycy-collection/vite-plugin-translate.git"
   },
-  "bugs": "https://github.com/hackycy/pkg-placeholder/issues",
+  "bugs": "https://github.com/hackycy-collection/vite-plugin-translate/issues",
   "keywords": [],
   "sideEffects": false,
   "exports": {
     ".": "./dist/index.mjs",
+    "./helper": "./dist/helper.mjs",
     "./package.json": "./package.json"
   },
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
   "files": [
+    "bundle",
     "dist"
   ],
   "scripts": {
@@ -32,5 +34,11 @@
     "start": "tsx src/index.ts",
     "test": "vitest",
     "typecheck": "tsc"
+  },
+  "peerDependencies": {
+    "vite": ">=5"
+  },
+  "devDependencies": {
+    "vite": "catalog:cli"
   }
 }
