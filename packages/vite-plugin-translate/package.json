@@ -5,12 +5,12 @@
   "description": "Vite plugin for translate.js",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
-  "homepage": "https://github.com/hackycy-collection/vite-plugin-translate#readme",
+  "homepage": "https://github.com/hackycy-collection/translation-master#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hackycy-collection/vite-plugin-translate.git"
+    "url": "git+https://github.com/hackycy-collection/translation-master.git"
   },
-  "bugs": "https://github.com/hackycy-collection/vite-plugin-translate/issues",
+  "bugs": "https://github.com/hackycy-collection/translation-master/issues",
   "keywords": [],
   "sideEffects": false,
   "exports": {
