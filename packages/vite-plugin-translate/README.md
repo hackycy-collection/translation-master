@@ -8,7 +8,7 @@ Vite plugin for [translate.js](https://github.com/xnx3/translate)
 ## Install
 
 ``` bash
-pnpm add vite-plugin-translate
+pnpm add -D vite-plugin-translate
 ```
 
 ## Usage
