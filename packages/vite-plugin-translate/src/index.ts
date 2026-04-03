@@ -74,7 +74,7 @@ export function ViteTranslatePlugin(options: PluginOptions): PluginOption | unde
       if (config.command === 'serve') {
         return {
           html,
-          tags: [{ children: await loadBundleSource(), injectTo: 'head', tag: 'script' }],
+          tags: [{ children: await loadBundleSource(), tag: 'script' }],
         }
       }
 
