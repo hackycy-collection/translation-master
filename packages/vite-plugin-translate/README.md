@@ -22,8 +22,18 @@ export default defineConfig({
     ViteTranslatePlugin({
       version: '4.0.3',
       initializeScript: `
-        translate.language.setLocal('english');
-        translate.execute();
+      try {
+        // 不出现的select的选择语言
+        translate.selectLanguageTag.show = false;
+
+        // 设置机器翻译服务通道
+        translate.service.use('client.edge');
+
+        //开启html页面变化的监控
+        translate.listener.start();
+      } catch (error) {
+        // ignore
+      }
       `,
     }),
   ],
