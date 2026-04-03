@@ -5,6 +5,7 @@ export default defineConfig({
     'src/index.ts',
     'src/helper.ts',
   ],
+  format: ['esm', 'cjs'],
   dts: true,
   exports: true,
   publint: true,
