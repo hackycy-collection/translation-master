@@ -21,12 +21,18 @@ export default defineConfig({
   plugins: [
     ViteTranslatePlugin({
       version: '4.0.3',
+      initializeScript: `
+        translate.language.setLocal('english');
+        translate.execute();
+      `,
     }),
   ],
 })
 ```
 
 `ViteTranslatePlugin` will read `bundle/<version>/translate.js` from the installed package, emit it to the build output with a version and timestamp in the file name, and inject the script tag into HTML automatically.
+
+When `initializeScript` is provided, the plugin injects it as a second script tag after `translate.js`, so the initialization code runs only after `translate.js` has been loaded and executed.
 
 Supported versions: `3.18.66`, `4.0.3`.
 

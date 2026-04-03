@@ -1,4 +1,4 @@
-import type { PluginOption, ResolvedConfig } from 'vite'
+import type { HtmlTagDescriptor, PluginOption, ResolvedConfig } from 'vite'
 import { readFile } from 'node:fs/promises'
 import { ensureTrailingSlash } from './utils'
 
@@ -23,13 +23,47 @@ async function readBundleSource(version: VERSION): Promise<string> {
   }
 }
 
+function createScriptTags(options: {
+  script?: { children: string } | { src: string }
+  initializeScript?: string
+}): HtmlTagDescriptor[] {
+  const tags: HtmlTagDescriptor[] = []
+
+  if (options.script) {
+    if ('children' in options.script) {
+      tags.push({ children: options.script.children, tag: 'script' })
+    }
+    else {
+      tags.push({ attrs: { src: options.script.src }, tag: 'script' })
+    }
+  }
+
+  if (options.initializeScript?.trim()) {
+    tags.push({ children: options.initializeScript, tag: 'script' })
+  }
+
+  return tags
+}
+
 export interface PluginOptions {
+  /**
+   * @description: 是否自动注入translate.js脚本到html中，默认为true
+   */
   inject?: boolean
+
+  /**
+   * @description: translate.js版本，必填项
+   */
   version: VERSION
+
+  /**
+   * @description: 在 translate.js 加载并执行后注入执行的初始化脚本
+   */
+  initializeScript?: string
 }
 
 export function ViteTranslatePlugin(options: PluginOptions): PluginOption | undefined {
-  const { inject = true, version } = options
+  const { inject = true, version, initializeScript } = options
 
   if (!inject) {
     return
@@ -74,14 +108,20 @@ export function ViteTranslatePlugin(options: PluginOptions): PluginOption | unde
       if (config.command === 'serve') {
         return {
           html,
-          tags: [{ children: await loadBundleSource(), tag: 'script' }],
+          tags: createScriptTags({
+            script: { children: await loadBundleSource() },
+            initializeScript,
+          }),
         }
       }
 
       const src = `${publicPath}${emittedFileName}`
       return {
         html,
-        tags: [{ attrs: { src }, tag: 'script' }],
+        tags: createScriptTags({
+          script: { src },
+          initializeScript,
+        }),
       }
     },
   }
