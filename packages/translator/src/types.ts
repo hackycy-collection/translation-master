@@ -1,5 +1,5 @@
 export interface TranslatorOptions {
-  /** Backend device, default 'auto' (prefer WebGPU, fallback WASM) */
+  /** Backend device, default 'wasm' */
   device?: 'auto' | 'wasm' | 'webgpu'
   /** Quantization precision, default 'q8' */
   dtype?: 'fp32' | 'fp16' | 'q8' | 'q4'
@@ -7,12 +7,16 @@ export interface TranslatorOptions {
   models?: ModelConfig[]
   /** Max models loaded simultaneously, default 3 */
   maxPoolSize?: number
-  /** Model loading progress callback */
-  onModelLoadProgress?: (event: ModelLoadProgress) => void
   /** Auto detect source language, default true */
   autoDetect?: boolean
   /** Custom cache implementation */
   cache?: CacheAdapter
+  /** Enable built-in toast progress UI, default true */
+  ui?: boolean
+  /** Enable debug mode for full result metadata, default false */
+  debug?: boolean
+  /** @deprecated Use events.on('modelLoad', ...) instead */
+  onModelLoadProgress?: (event: ModelLoadProgress) => void
 }
 
 export interface TranslateOptions {
@@ -39,6 +43,17 @@ export interface TranslateResult {
   duration: number
   /** Language detection confidence */
   confidence?: number
+  /** Whether result was served from cache */
+  cached?: boolean
+}
+
+export interface TranslateResultMinimal {
+  /** Translated text */
+  text: string
+  /** Detected source language */
+  from: string
+  /** Target language */
+  to: string
 }
 
 export interface ModelConfig {

@@ -33,20 +33,33 @@ function log(msg: string, level: 'info' | 'warn' | 'error' | 'progress' = 'info'
 
 // --- Translator instance ---
 const translator = new Translator({
-  device: 'auto',
-  maxPoolSize: 3,
-  onModelLoadProgress: (event) => {
-    if (event.state === 'progress') {
-      translateStatus.textContent = `Loading model: ${event.progress.toFixed(1)}%`
-      log(`Model ${event.modelId}: ${event.progress.toFixed(1)}%`, 'progress')
-    }
-    else if (event.state === 'done') {
-      log(`Model ${event.modelId}: loaded`, 'info')
-    }
-  },
+  // device defaults to 'wasm', no need to specify
+  // ui defaults to true, toast progress bar shows automatically
+  debug: true,
 })
 
-log('Translator initialized')
+// Listen to events
+translator.events.on('modelLoad', (e) => {
+  if (e.state === 'progress') {
+    translateStatus.textContent = `Loading model: ${e.progress.toFixed(1)}%`
+    log(`Model ${e.modelId}: ${e.progress.toFixed(1)}%`, 'progress')
+  }
+  else if (e.state === 'done') {
+    log(`Model ${e.modelId}: loaded`, 'info')
+  }
+})
+
+translator.events.on('translate', (e) => {
+  if (e.cached) {
+    log(`Cache hit for "${e.text.slice(0, 30)}..." → ${e.to}`, 'info')
+  }
+})
+
+translator.events.on('error', (e) => {
+  log(`Error [${e.context ?? 'unknown'}]: ${e.error.message}`, 'error')
+})
+
+log('Translator initialized (device: wasm, ui: enabled, debug: true)')
 
 // --- Translate ---
 let abortController: AbortController | null = null
@@ -78,8 +91,8 @@ btnTranslate.addEventListener('click', async () => {
 
     translateResult.textContent = result.text
     translateResult.classList.add('success')
-    translateStatus.textContent = `Done in ${result.duration}ms | Model: ${result.model} | From: ${result.from}${result.confidence != null ? ` (${(result.confidence * 100).toFixed(0)}%)` : ''}`
-    log(`Result: "${result.text}" (${result.duration}ms, model: ${result.model})`)
+    translateStatus.textContent = `Done in ${result.duration}ms | Model: ${result.model} | From: ${result.from}${result.confidence != null ? ` (${(result.confidence * 100).toFixed(0)}%)` : ''}${result.cached ? ' | Cached' : ''}`
+    log(`Result: "${result.text}" (${result.duration}ms, model: ${result.model}${result.cached ? ', cached' : ''})`)
   }
   catch (err: any) {
     if (err?.message === 'Translation aborted') {
@@ -166,11 +179,11 @@ btnStats.addEventListener('click', () => {
 btnClearCache.addEventListener('click', async () => {
   btnClearCache.disabled = true
   try {
-    await translator.dispose()
+    await translator.clearCache()
     statsDisplay.innerHTML = ''
     translateResult.textContent = ''
     translateStatus.textContent = ''
-    log('Cache cleared and all models disposed')
+    log('Translation result cache cleared')
   }
   catch (err: any) {
     log(`Clear cache error: ${err?.message}`, 'error')
@@ -185,7 +198,7 @@ btnDispose.addEventListener('click', async () => {
   try {
     await translator.dispose()
     statsDisplay.innerHTML = ''
-    log('All models disposed')
+    log('All models disposed, caches cleared, UI removed')
   }
   catch (err: any) {
     log(`Dispose error: ${err?.message}`, 'error')

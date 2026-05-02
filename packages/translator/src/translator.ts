@@ -1,9 +1,11 @@
-import type { ModelLoadProgress, ResolvedModel, TranslateOptions, TranslateResult, TranslatorOptions } from './types'
+import type { ModelLoadProgress, ResolvedModel, TranslateOptions, TranslateResult, TranslateResultMinimal, TranslatorOptions } from './types'
 import { TranslationResultCache } from './cache'
-import { resolveDevice } from './env'
+import { isSSR, resolveDevice } from './env'
+import { TranslatorEventEmitter } from './event-emitter'
 import { detectLanguage, getSupportedLanguages, normalizeLang } from './lang'
 import { ModelPool } from './model-pool'
 import { ModelRouter } from './model-router'
+import { ToastUI } from './ui'
 
 export class Translator {
   private router: ModelRouter
@@ -12,27 +14,46 @@ export class Translator {
   private device: TranslatorOptions['device']
   private dtype: TranslatorOptions['dtype']
   private autoDetect: boolean
-  private progressCallback?: TranslatorOptions['onModelLoadProgress']
+  private debug: boolean
   private transformersModule: typeof import('@huggingface/transformers') | null = null
 
+  /** Event emitter for modelLoad, translate, error events */
+  readonly events: TranslatorEventEmitter
+
+  /** Built-in toast UI */
+  private toastUI: ToastUI | null = null
+
   constructor(options?: TranslatorOptions) {
+    if (isSSR()) {
+      throw new Error(
+        '[translator] SSR environment detected. Translator requires a browser environment with WebGPU/WASM support. '
+        + 'If you are using Next.js/Nuxt, ensure Translator is only instantiated on the client side.',
+      )
+    }
+
     this.router = new ModelRouter(options?.models)
-    this.pool = new ModelPool(options?.maxPoolSize ?? 3)
+    this.pool = ModelPool.getShared(options?.maxPoolSize ?? 3)
     this.resultCache = new TranslationResultCache()
-    this.device = options?.device ?? 'auto'
-    // Do NOT set a default dtype — transformers.js v3 auto-selects the correct
-    // ONNX variant (q8/_quantized.onnx) when dtype is omitted. Passing dtype
-    // explicitly triggers bug #1581 which selects the wrong file and produces
-    // garbage output.
+    this.device = options?.device ?? 'wasm'
     this.dtype = options?.dtype
     this.autoDetect = options?.autoDetect ?? true
-    this.progressCallback = options?.onModelLoadProgress
+    this.debug = options?.debug ?? false
+    this.events = new TranslatorEventEmitter()
+
+    // Toast UI (enabled by default)
+    const uiEnabled = options?.ui !== false
+    this.toastUI = new ToastUI(this.events, uiEnabled)
+
+    // Backward compat: wire up deprecated onModelLoadProgress
+    if (options?.onModelLoadProgress) {
+      this.events.on('modelLoad', options.onModelLoadProgress)
+    }
   }
 
   /**
    * Translate text from source language to target language.
    */
-  async translate(text: string, options: TranslateOptions): Promise<TranslateResult> {
+  async translate(text: string, options: TranslateOptions): Promise<TranslateResult & TranslateResultMinimal> {
     const startTime = Date.now()
     const to = normalizeLang(options.to)
 
@@ -54,14 +75,12 @@ export class Translator {
     // Check result cache
     const cached = this.resultCache.get(text, from, to)
     if (cached) {
-      return {
-        text: cached,
-        from,
-        to,
-        model: 'cache',
-        duration: Date.now() - startTime,
-        confidence,
+      const duration = Date.now() - startTime
+      this.events.emit('translate', { text, from, to, result: cached, duration, cached: true })
+      if (this.debug) {
+        return { text: cached, from, to, model: 'cache', duration, confidence, cached: true }
       }
+      return { text: cached, from, to, model: 'cache', duration, confidence, cached: true }
     }
 
     // Resolve model
@@ -73,14 +92,13 @@ export class Translator {
     // Cache result
     this.resultCache.set(text, from, to, translatedText)
 
-    return {
-      text: translatedText,
-      from,
-      to,
-      model: resolved.modelId,
-      duration: Date.now() - startTime,
-      confidence,
+    const duration = Date.now() - startTime
+    this.events.emit('translate', { text, from, to, result: translatedText, duration, model: resolved.modelId })
+
+    if (this.debug) {
+      return { text: translatedText, from, to, model: resolved.modelId, duration, confidence }
     }
+    return { text: translatedText, from, to, model: resolved.modelId, duration, confidence }
   }
 
   /**
@@ -125,6 +143,7 @@ export class Translator {
           model: resolved.modelId,
           duration: Date.now() - startTime,
           confidence,
+          cached: true,
         })
         continue
       }
@@ -178,11 +197,21 @@ export class Translator {
   }
 
   /**
-   * Dispose all models and free resources.
+   * Clear translation result cache and model cache (Cache API).
+   */
+  async clearCache(): Promise<void> {
+    this.resultCache.clear()
+  }
+
+  /**
+   * Dispose all models, clear caches, and remove toast UI.
    */
   async dispose(): Promise<void> {
     await this.pool.disposeAll()
     this.resultCache.clear()
+    this.toastUI?.destroy()
+    this.toastUI = null
+    this.events.removeAllListeners()
   }
 
   /**
@@ -197,7 +226,7 @@ export class Translator {
    */
   private async getPipeline(resolved: ResolvedModel): Promise<any> {
     const tf = await this.loadTransformers()
-    const device = await resolveDevice(this.device ?? 'auto')
+    const device = await resolveDevice(this.device ?? 'wasm')
 
     const options: Record<string, unknown> = {
       device,
@@ -209,24 +238,32 @@ export class Translator {
     }
 
     const progressCallback = (event: unknown): void => {
-      if (this.progressCallback) {
-        const e = event as { status?: string, file?: string, progress?: number }
-        this.progressCallback({
-          modelId: resolved.modelId,
-          progress: e.progress ?? 0,
-          state: (e.status ?? 'progress') as ModelLoadProgress['state'],
-          file: e.file,
-        })
+      const e = event as { status?: string, file?: string, progress?: number }
+      const modelEvent = {
+        modelId: resolved.modelId,
+        progress: e.progress ?? 0,
+        state: (e.status ?? 'progress') as ModelLoadProgress['state'],
+        file: e.file,
       }
+      this.events.emit('modelLoad', modelEvent)
     }
 
-    return this.pool.acquire(
+    const pipeline = await this.pool.acquire(
       resolved.modelId,
       'translation',
       options,
       (modelId, _task, opts) => tf.pipeline('translation', modelId, opts) as any,
       progressCallback,
     )
+
+    // Pipeline is fully loaded — emit 'ready' so the toast can dismiss
+    this.events.emit('modelLoad', {
+      modelId: resolved.modelId,
+      progress: 100,
+      state: 'ready',
+    })
+
+    return pipeline
   }
 
   /**

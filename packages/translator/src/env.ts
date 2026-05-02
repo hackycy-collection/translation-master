@@ -1,11 +1,20 @@
 export type DeviceType = 'wasm' | 'webgpu'
 
 /**
+ * Check if running in a server-side rendering (SSR) environment.
+ */
+export function isSSR(): boolean {
+  return typeof window === 'undefined' || typeof document === 'undefined'
+}
+
+/**
  * Check if WebGPU is available in the current environment.
  */
 export async function isWebGPUAvailable(): Promise<boolean> {
+  if (isSSR())
+    return false
   const nav = navigator as Navigator & { gpu?: any }
-  if (typeof navigator === 'undefined' || !nav.gpu)
+  if (!nav.gpu)
     return false
   try {
     const adapter = await nav.gpu.requestAdapter()
@@ -44,4 +53,11 @@ export function isWorker(): boolean {
  */
 export function isBrowser(): boolean {
   return typeof window !== 'undefined' && typeof document !== 'undefined'
+}
+
+/**
+ * Check if Web Workers are supported in the current environment.
+ */
+export function isWorkerSupported(): boolean {
+  return isBrowser() && typeof Worker !== 'undefined'
 }

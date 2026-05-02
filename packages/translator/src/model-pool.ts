@@ -10,12 +10,28 @@ interface PoolEntry {
   loading: Promise<PipelineInstance> | null
 }
 
+/** Global shared pool instances, keyed by maxSize */
+const sharedPools = new Map<number, ModelPool>()
+
 export class ModelPool {
   private pool = new Map<string, PoolEntry>()
   private maxSize: number
 
   constructor(maxSize = 3) {
     this.maxSize = maxSize
+  }
+
+  /**
+   * Get or create a shared ModelPool instance for the given maxSize.
+   * Multiple Translator instances with the same maxSize share one pool.
+   */
+  static getShared(maxSize = 3): ModelPool {
+    let instance = sharedPools.get(maxSize)
+    if (!instance) {
+      instance = new ModelPool(maxSize)
+      sharedPools.set(maxSize, instance)
+    }
+    return instance
   }
 
   /**

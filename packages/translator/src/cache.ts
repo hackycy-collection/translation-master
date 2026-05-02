@@ -1,19 +1,35 @@
 import type { CacheAdapter } from './types'
 
+const CACHE_VERSION_KEY = 'translator:cache-version'
+
 /**
  * Default CacheAdapter using the browser Cache API.
+ * Supports version-based cache invalidation.
  */
 export class BrowserCacheAdapter implements CacheAdapter {
   private cacheName: string
+  private version: string
 
-  constructor(cacheName = 'translator-models') {
+  constructor(cacheName = 'translator-models', version = '1') {
     this.cacheName = cacheName
+    this.version = version
   }
 
   private async getCache(): Promise<Cache | undefined> {
     if (typeof caches === 'undefined')
       return undefined
+    await this.checkVersion()
     return caches.open(this.cacheName)
+  }
+
+  private async checkVersion(): Promise<void> {
+    if (typeof localStorage === 'undefined')
+      return
+    const stored = localStorage.getItem(CACHE_VERSION_KEY)
+    if (stored !== this.version) {
+      await this.clear()
+      localStorage.setItem(CACHE_VERSION_KEY, this.version)
+    }
   }
 
   async get(key: string): Promise<ArrayBuffer | null> {
