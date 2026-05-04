@@ -17,6 +17,7 @@ export class Translator {
   private dtype: TranslatorOptions['dtype']
   private autoDetect: boolean
   private debug: boolean
+  private modelBaseUrl?: string
   private transformersModule: typeof import('@huggingface/transformers') | null = null
 
   /** Event emitter for modelLoad, translate, error events */
@@ -48,6 +49,7 @@ export class Translator {
     this.dtype = options?.dtype
     this.autoDetect = options?.autoDetect ?? true
     this.debug = options?.debug ?? false
+    this.modelBaseUrl = options?.modelBaseUrl
     this.events = new TranslatorEventEmitter()
 
     // Determine whether to use Web Worker for inference
@@ -83,6 +85,7 @@ export class Translator {
           models: this.router.getConfigs(),
           autoDetect: this.autoDetect,
           workerUrl: this._workerUrl,
+          modelBaseUrl: this.modelBaseUrl,
         })
         // Forward events from worker to main event emitter
         this._workerTranslator.events.on('modelLoad', e => this.events.emit('modelLoad', e))
@@ -481,7 +484,12 @@ export class Translator {
    */
   private async loadTransformers(): Promise<typeof import('@huggingface/transformers')> {
     if (!this.transformersModule) {
-      this.transformersModule = await import('@huggingface/transformers')
+      const tf = await import('@huggingface/transformers')
+      if (this.modelBaseUrl) {
+        tf.env.allowLocalModels = true
+        tf.env.localModelPath = this.modelBaseUrl
+      }
+      this.transformersModule = tf
     }
     return this.transformersModule
   }

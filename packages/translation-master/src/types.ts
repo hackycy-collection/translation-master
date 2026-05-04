@@ -22,6 +22,24 @@ export interface TranslatorOptions {
    * Default: auto-resolved from the package's bundled worker entry.
    */
   workerUrl?: URL | string
+  /**
+   * Custom base URL for loading model files.
+   * When set, models are fetched from `{modelBaseUrl}/{modelId}/resolve/main/`
+   * instead of the default HuggingFace Hub.
+   *
+   * Supports:
+   * - Internal CDN: `'https://hf-mirror.company.com'`
+   * - Local static files: `'/models'` (for offline/bundled models)
+   *
+   * Model files must follow the HuggingFace repository directory structure:
+   * ```
+   * {modelBaseUrl}/Xenova/opus-mt-zh-en/resolve/main/model.onnx
+   * {modelBaseUrl}/Xenova/opus-mt-zh-en/resolve/main/tokenizer.json
+   * {modelBaseUrl}/Xenova/opus-mt-zh-en/resolve/main/config.json
+   * ...
+   * ```
+   */
+  modelBaseUrl?: string
   /** Enable built-in toast progress UI, default true */
   ui?: boolean
   /** Enable debug mode for full result metadata, default false */
