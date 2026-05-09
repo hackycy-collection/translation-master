@@ -64,8 +64,13 @@
 │   │           │   └── OrderDetail.vue.json
 │   │           └── user/
 │   │               └── UserCenter.vue.json
-│   └── cache/
-│       └── scan-meta.json       # 文件 hash 缓存，支持增量扫描
+│   ├── cache/
+│   │   └── scan-meta.json       # 文件 hash 缓存，支持增量扫描
+│   └── backups/                 # apply 前自动备份，用于 restore 回滚
+│       ├── src/
+│       │   └── views/
+│       │       └── login.vue
+│       └── backup-meta.json
 ├── src/
 ├── public/
 └── package.json
@@ -104,7 +109,7 @@ tmigrate init
 .tmigrate/
 ├── config.json       # 默认配置（可通过交互式问答定制）
 ├── glossary.json     # 空术语表
-└── .gitkeep          # 保证 maps/ 和 cache/ 目录可被 git 追踪
+└── .gitkeep          # 保证 maps/、cache/、backups/ 目录可被 git 追踪
 ```
 
 支持选项：
@@ -137,6 +142,9 @@ tmigrate scan ./src/modules/order --to en
 
 # 增量扫描（只处理变更文件，依赖 cache/scan-meta.json）
 tmigrate scan ./src --incremental
+
+# 增量扫描并清理 deprecated 条目
+tmigrate scan ./src --incremental --clean-deprecated
 ```
 
 ### 阶段二：人工确认 + 回写
@@ -156,12 +164,27 @@ tmigrate apply
 
 ### 回滚
 
+`apply` 执行时自动将原文件备份到 `.tmigrate/backups/`，保留目录结构。`restore` 命令从备份恢复，不依赖 source map 反向推导。
+
 ```bash
-# 回滚全部已应用的翻译
+# 回滚全部已应用的翻译（从 .tmigrate/backups/ 恢复）
 tmigrate restore
 
 # 只回滚指定文件
 tmigrate restore --path src/views/login.vue
+
+# 查看备份列表
+tmigrate restore --list
+```
+
+`.tmigrate/backups/` 目录结构与 `maps/` 一致，每个文件记录备份时间：
+
+```
+.tmigrate/backups/
+├── src/
+│   └── views/
+│       └── login.vue           # apply 前的原始文件
+└── backup-meta.json            # 备份时间、对应 apply 批次
 ```
 
 ## 配置文件
@@ -196,7 +219,11 @@ tmigrate restore --path src/views/login.vue
   // 翻译器配置
   "translator": "local",   // "local" (ONNX) | "api" (外部翻译 API)
   "translatorOptions": {
-    "modelBaseUrl": "https://cdn.example.com/models"
+    "modelBaseUrl": "https://cdn.example.com/models",
+    "apiKey": "",            // api 模式下的鉴权 token
+    "timeout": 30000,        // 单次请求超时（ms）
+    "retries": 3,            // 失败重试次数
+    "concurrency": 5         // 并发请求数
   },
   "batchSize": 20
 }
@@ -208,27 +235,24 @@ tmigrate restore --path src/views/login.vue
 
 ```jsonc
 {
-  "version": 1,
+  "version": 2,
   "generatedAt": "2026-05-10T08:00:00Z",
   "entries": {
     "请输入用户名": {
-      "id": "a1b2c3d4",                 // 稳定 ID（hash of text + first location）
+      "id": "a1b2c3d4",                 // 稳定 ID（hash(text + filePath)）
       "translation": "Please enter your username",
+      "translationSource": "machine",   // "machine" | "glossary" | "manual"
       "approved": false,
       "skip": false,
-      "locations": [
-        { "file": "src/views/login.vue", "line": 12, "column": 8, "context": "template" },
-        { "file": "src/components/Form.vue", "line": 45, "column": 4, "context": "script" }
-      ]
+      "location": { "line": 12, "column": 8, "context": "template" }
     },
     "提交": {
       "id": "e5f6g7h8",
       "translation": "Submit",
+      "translationSource": "glossary",  // 术语表命中，可自动 approved
       "approved": true,
       "skip": false,
-      "locations": [
-        { "file": "src/views/login.vue", "line": 28, "column": 12, "context": "template" }
-      ]
+      "location": { "line": 28, "column": 12, "context": "template" }
     }
   }
 }
@@ -238,21 +262,34 @@ tmigrate restore --path src/views/login.vue
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | `string` | 稳定 ID，由 `hash(text + firstLocation)` 生成。源文本微小改动时可通过 fuzzy matching 迁移旧 ID |
-| `translation` | `string` | 机器翻译结果，可人工修改 |
-| `approved` | `boolean` | `false` 时 `apply` 会跳过，需手动改为 `true` |
+| `id` | `string` | 稳定 ID，由 `hash(text + filePath)` 生成。不依赖行号，保证增量扫描时 ID 稳定。源文本微小改动时可通过 fuzzy matching 迁移旧 ID |
+| `translation` | `string` | 翻译结果，可人工修改 |
+| `translationSource` | `string` | 翻译来源：`"machine"`（机器翻译）、`"glossary"`（术语表命中）、`"manual"`（人工填写）。术语表命中的条目可自动 approved |
+| `approved` | `boolean` | `false` 时 `apply` 会跳过，需手动改为 `true`。当 `translation` 被机器重新翻译时，自动重置为 `false` |
 | `skip` | `boolean` | 标记为 `true` 则永久跳过该条目（如无需翻译的枚举值） |
-| `locations` | `Location[]` | 该文本在项目中出现的所有位置 |
+| `location` | `Location` | 该文本在当前文件中的位置（每个 map 文件只记录本文件内的出现） |
 | `context` | `string` | 出现位置的上下文类型，影响过滤规则的行为 |
 
 ### ID 生成算法
 
 ```
-id = hash(text + ":" + firstLocation.file + ":" + firstLocation.line)
+id = hash(text + ":" + filePath)
      .slice(0, 8)
 ```
 
-当源文本发生微小变更时（如修正错别字），通过 fuzzy matching（编辑距离 ≤ 3）尝试关联旧 ID，保留已有的翻译和审批状态。
+ID 只绑定文本内容和文件路径，不依赖行号。这样即使文件内容增减导致行号偏移，同一文本在同一文件中的 ID 保持稳定，增量扫描不会产生冗余条目。
+
+同一原文出现在不同文件中会生成不同 ID，各自独立管理翻译和审批状态。
+
+当源文本发生微小变更时（如修正错别字），通过 fuzzy matching 尝试关联旧 ID，保留已有的翻译和审批状态。匹配策略使用**字符级最长公共子序列（LCS）比例**而非编辑距离，更适合中文：
+
+```
+similarity = 2 * LCS_length(text_a, text_b) / (len(text_a) + len(text_b))
+
+阈值: similarity ≥ 0.8 视为同一文本，迁移旧 ID
+```
+
+中文场景下编辑距离容易误判（如"请输入用户名"与"请输入密码"编辑距离仅为 2），LCS 比率能更准确反映语义相似度。
 
 ## 术语表
 
@@ -274,6 +311,16 @@ id = hash(text + ":" + firstLocation.file + ":" + firstLocation.line)
 ```
 
 上下文区分格式：`<模块>/<父级>/<原文>`，优先匹配更具体的规则。
+
+### 匹配策略
+
+术语表匹配按以下优先级依次尝试，命中即停止：
+
+1. **上下文精确匹配** — `glossary["订单/状态/已激活"]` 且当前文本所在模块为"订单"
+2. **无上下文精确匹配** — `glossary["确定"]`
+3. **上下文前缀匹配** — `glossary["订单/状态/*"]` 匹配"订单"模块下"状态"父级的所有文本
+
+术语表命中的条目自动设置 `translationSource: "glossary"` 和 `approved: true`，无需人工确认。机器翻译的条目设置 `translationSource: "machine"` 和 `approved: false`，需人工校对后改为 `true`。
 
 ## 文件类型与解析策略
 
@@ -371,12 +418,14 @@ const { descriptor } = parse(content, { sourceMap: true })
 # 方案 A：只提交配置和术语表，映射文件不提交（各人本地生成）
 .tmigrate/maps/
 .tmigrate/cache/
+.tmigrate/backups/
 
 # 方案 B：全部提交（团队共享翻译进度，推荐）
 # 不添加额外 gitignore 规则
 
 # 方案 C：只提交已审批的条目（需要 CI 脚本过滤）
 # .tmigrate/maps/
+# .tmigrate/backups/
 ```
 
 ## 增量扫描机制
@@ -401,10 +450,20 @@ const { descriptor } = parse(content, { sourceMap: true })
 5. 更新 `scan-meta.json`
 
 合并策略：
-- 新增的中文文本 → 添加新 entry（`approved: false`）
+- 新增的中文文本 → 添加新 entry（`approved: false`，`translationSource: "machine"`）
 - 已删除的中文文本 → 标记为 `deprecated`（不自动删除，人工确认）
-- 文本微小变更 → fuzzy matching 关联旧 ID，保留翻译
+- 文本微小变更 → fuzzy matching（LCS 比率 ≥ 0.8）关联旧 ID，**若翻译结果变化则重置 `approved: false`**
 - 文本完全变更 → 新 ID，旧 entry 标记 `deprecated`
+- 术语表命中 → 设置 `translationSource: "glossary"`，自动 `approved: true`
+
+**deprecated 清理策略：**
+
+`deprecated` 条目不会无限累积。`scan` 命令提供 `--clean-deprecated` 选项，移除所有 deprecated 条目。建议在确认回写完成后执行一次清理：
+
+```bash
+# 清理 deprecated 条目后重新扫描
+tmigrate scan ./src --clean-deprecated
+```
 
 ## 包结构
 
@@ -427,8 +486,13 @@ packages/i18n-migrate-cli/
 │   │   ├── markdown.ts          # Markdown 解析器
 │   │   └── yaml.ts              # YAML 解析器
 │   ├── extractor.ts             # 文本提取编排器
-│   ├── translator-pipeline.ts   # 翻译流水线（批量 + 占位符保护）
+│   ├── translator/
+│   │   ├── interface.ts         # Translator 抽象接口
+│   │   ├── onnx.ts              # 本地 ONNX 翻译器
+│   │   ├── api.ts               # 外部 API 翻译器适配
+│   │   └── pipeline.ts          # 翻译流水线（批量调度、并发控制、重试）
 │   ├── replacer.ts              # AST 级回写器
+│   ├── backup.ts                # apply 前自动备份 + restore 回滚
 │   ├── mapping.ts               # 分片映射文件读写 + 合并
 │   ├── cache.ts                 # 增量扫描缓存管理
 │   ├── glossary.ts              # 术语表加载与匹配
@@ -437,6 +501,7 @@ packages/i18n-migrate-cli/
 │       ├── placeholder.ts       # 占位符保护/还原
 │       ├── chinese-detector.ts  # 中文检测
 │       ├── id-generator.ts      # 稳定 ID 生成
+│       ├── fuzzy-match.ts       # 中文 fuzzy matching（LCS 比率）
 │       └── filter.ts            # 文件/文本过滤规则引擎
 ├── bin/
 │   └── tmigrate.ts              # bin 入口
@@ -449,7 +514,7 @@ packages/i18n-migrate-cli/
 
 ```typescript
 interface TextSegment {
-  /** 稳定 ID，hash(text + firstLocation) */
+  /** 稳定 ID，hash(text + filePath) */
   id: string
   /** 原始中文文本 */
   text: string
@@ -471,15 +536,64 @@ interface TextSegment {
   nodeType: string
 }
 
+interface TranslationEntry {
+  id: string
+  translation: string
+  translationSource: 'machine' | 'glossary' | 'manual'
+  approved: boolean
+  skip: boolean
+}
+
 interface FileParser {
   /** 支持的文件扩展名 */
   supportedExtensions: string[]
   /** 从文件内容中提取中文文本 */
   extract(content: string, filePath: string): TextSegment[]
-  /** 将翻译结果回写到文件内容 */
-  replace(content: string, segments: TextSegment[], translations: Map<string, string>): string
+  /** 将翻译结果回写到文件内容，返回新内容和 source map */
+  replace(
+    content: string,
+    segments: TextSegment[],
+    translations: Map<string, TranslationEntry>
+  ): { content: string; sourceMap?: object }
 }
 ```
+
+## Translator 接口
+
+翻译器通过统一接口抽象，`pipeline.ts` 负责批量调度、并发控制和失败重试，不关心具体翻译实现。
+
+```typescript
+interface Translator {
+  /** 翻译一批文本 */
+  translate(texts: string[], options: TranslateOptions): Promise<TranslateResult[]>
+}
+
+interface TranslateOptions {
+  sourceLocale: string
+  targetLocale: string
+  /** 术语表，优先使用其中的翻译 */
+  glossary?: Record<string, string>
+}
+
+interface TranslateResult {
+  /** 原文 */
+  source: string
+  /** 翻译结果 */
+  translation: string
+  /** 翻译来源：术语表命中 or 机器翻译 */
+  translationSource: 'glossary' | 'machine'
+  /** 置信度（0-1），用于决定是否自动 approved */
+  confidence?: number
+}
+```
+
+`pipeline.ts` 的职责：
+
+1. 将待翻译文本按 `batchSize` 分片
+2. 按 `concurrency` 并发调用 Translator
+3. 失败时按 `retries` 重试，超过重试次数的批次标记为失败
+4. 对含插值的文本，先调用 `placeholder.ts` 保护，翻译后再还原
+5. 术语表命中的条目自动设置 `translationSource: "glossary"` 和 `approved: true`
 
 ## 依赖
 
@@ -502,9 +616,9 @@ interface FileParser {
 ## 与现有架构的关系
 
 ```
-@translation-master/core              ← 复用 Translator, detectLanguage
-@translation-master/node              ← 复用 Node Translator (ONNX CPU)
-@translation-master/i18n-migrate-cli  ← 新包，文件扫描/解析/分片映射/回写
+@translation-master/core              ← 复用 Translator 接口, detectLanguage
+@translation-master/node              ← 复用 Node Translator (ONNX CPU)，实现 Translator 接口
+@translation-master/i18n-migrate-cli  ← 新包，文件扫描/解析/分片映射/回写/备份
 ```
 
 ## 已识别的风险与缓解
@@ -513,7 +627,8 @@ interface FileParser {
 
 机器翻译对短 UI 文本表现不佳（"确定" → "OK" vs "Confirm" vs "Determine"）。缓解措施：
 - 两阶段工作流允许人工校对
-- 术语表（`glossary.json`）高频词预设翻译
+- 术语表（`glossary.json`）高频词预设翻译，命中自动 approved
+- `translationSource` 字段区分翻译来源，术语表命中无需人工确认
 - 映射文件可跨项目复用
 
 ### 误翻译
@@ -533,7 +648,7 @@ interface FileParser {
 
 源文件直接修改风险高。缓解措施：
 - `--dry-run` 模式预览
-- `restore` 命令回滚
+- `apply` 时自动备份原文件到 `.tmigrate/backups/`，`restore` 从备份恢复
 - 映射文件保留原始文本
 - `cache/scan-meta.json` 记录文件 hash，可检测非翻译导致的变更
 
@@ -549,12 +664,13 @@ interface FileParser {
 | 阶段 | 内容 | 预估 |
 |------|------|------|
 | P0 | 文件扫描 + Vue template/JS/TS 提取 + `.tmigrate/maps/` 分片写入 | 2-3 天 |
-| P0 | 集成 ONNX 翻译 + 批量翻译 + 术语表 | 1 天 |
-| P0 | AST 级回写 + dry-run + diff 预览 | 2 天 |
+| P0 | Translator 接口 + ONNX 实现 + pipeline 批量调度 + 术语表匹配 | 2 天 |
+| P0 | AST 级回写（id 做 key）+ dry-run + diff 预览 | 2 天 |
+| P0 | apply 自动备份 + restore 回滚 | 0.5 天 |
 | P1 | CLI 封装 + `init` 命令 + config.json 配置 | 1 天 |
 | P1 | 占位符保护（插值字符串） | 1 天 |
 | P1 | JSON / HTML / CSS / Markdown / YAML 解析器 | 1-2 天 |
 | P2 | 过滤规则引擎 | 1 天 |
-| P2 | 增量扫描 + cache 机制 | 1 天 |
-| P2 | 回滚能力 + 补丁文件生成 | 1 天 |
-| P2 | 术语表 + 上下文感知翻译 + fuzzy ID 迁移 | 2 天 |
+| P2 | 增量扫描 + cache 机制 + deprecated 清理 | 1 天 |
+| P2 | 中文 fuzzy matching（LCS 比率）+ ID 迁移 | 1 天 |
+| P2 | `translationSource` 追踪 + 术语表自动 approved | 0.5 天 |
