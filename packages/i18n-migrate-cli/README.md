@@ -1,0 +1,560 @@
+# @translation-master/i18n-migrate-cli
+
+> 扫描前端项目源码，提取中文文本并翻译为英文，作为 i18n 的快速替代方案。
+
+## 背景
+
+中文前端项目需要快速上线国际版，传统 i18n 方案（提取 locale 文件、包裹 t() 函数、适配各处调用）工期长、改动大。本工具提供一种**源码级直接翻译**的过渡方案：扫描项目中的源文件，将中文文本替换为英文翻译，以最小改动实现界面英文化。
+
+## 核心流程
+
+```
+项目根目录
+    │
+    ▼
+┌───────────┐
+│  Scanner   │  glob 扫描文件，按过滤规则筛选
+└─────┬─────┘
+      │
+┌─────▼─────┐
+│  Extractor │  根据文件后缀选择 Parser，提取中文文本
+└─────┬─────┘  记录位置（文件/行/列/上下文）
+      │
+┌─────▼─────┐
+│  Mapping   │  写入 .tmigrate/maps/ 分片映射文件
+└─────┬─────┘
+      │
+  ┌───┴───┐
+  ▼       ▼
+机器翻译  人工校对
+(批量)   (编辑 map 文件)
+  └───┬───┘
+      │
+┌─────▼─────┐
+│  Replacer  │  读取最终映射，AST 级回写源文件
+└─────┬─────┘
+      │
+┌─────▼─────┐
+│  Reporter  │  生成变更报告 / diff
+└───────────┘
+```
+
+## `.tmigrate` 目录结构
+
+所有翻译相关的元数据和映射文件统一存放在项目根目录的 `.tmigrate/` 文件夹中，与源码隔离，保持项目整洁。
+
+```
+项目根目录/
+├── .tmigrate/
+│   ├── config.json              # 全局配置
+│   ├── glossary.json            # 术语表（高频词预设翻译）
+│   ├── maps/
+│   │   └── src/
+│   │       ├── views/
+│   │       │   ├── login.vue.json           # ← src/views/login.vue
+│   │       │   └── dashboard.vue.json       # ← src/views/dashboard.vue
+│   │       ├── components/
+│   │       │   ├── Form.vue.json
+│   │       │   └── Table.vue.json
+│   │       ├── utils/
+│   │       │   └── constant.ts.json         # ← src/utils/constant.ts
+│   │       └── modules/
+│   │           ├── order/
+│   │           │   ├── OrderList.vue.json
+│   │           │   └── OrderDetail.vue.json
+│   │           └── user/
+│   │               └── UserCenter.vue.json
+│   └── cache/
+│       └── scan-meta.json       # 文件 hash 缓存，支持增量扫描
+├── src/
+├── public/
+└── package.json
+```
+
+### 映射规则
+
+规则只有一条：**在源文件完整文件名后加 `.json`，目录结构保持一致**。
+
+```
+源文件:  src/views/login.vue
+映射:    .tmigrate/maps/src/views/login.vue.json
+```
+
+```
+源文件:  src/utils/constant.ts
+映射:    .tmigrate/maps/src/utils/constant.ts.json
+```
+
+这样做的好处：
+- **无歧义** — `utils.ts`（文件）和 `utils/`（目录）不会冲突，因为 `utils.ts.json` 保留了扩展名
+- **路径可逆** — 去掉 `.json` 后缀再拼上源码根目录，就是原始文件路径
+- **IDE 友好** — 在 `.tmigrate/maps/` 下浏览时，目录结构和源码一一对应，直觉清晰
+
+## 初始化
+
+使用前先执行 `init`，生成 `.tmigrate/` 目录结构和默认配置：
+
+```bash
+tmigrate init
+```
+
+生成内容：
+
+```
+.tmigrate/
+├── config.json       # 默认配置（可通过交互式问答定制）
+├── glossary.json     # 空术语表
+└── .gitkeep          # 保证 maps/ 和 cache/ 目录可被 git 追踪
+```
+
+支持选项：
+
+```bash
+# 交互式配置（问答引导选择 sourceLocale、targetLocale、include 等）
+tmigrate init --interactive
+
+# 指定源语言 / 目标语言
+tmigrate init --from zh --to en
+
+# 跳过已有文件（不覆盖已存在的 config.json）
+tmigrate init --no-overwrite
+```
+
+如果 `.tmigrate/` 已存在，默认会提示是否覆盖。`--no-overwrite` 只创建缺失的文件，不覆盖已有配置。
+
+## 两阶段工作流
+
+### 阶段一：扫描 + 翻译
+
+扫描项目源码，提取所有中文文本，机器翻译后写入 `.tmigrate/maps/` 分片文件。
+
+```bash
+# 全量扫描
+tmigrate scan ./src --to en
+
+# 只扫描指定目录（生成对应分片）
+tmigrate scan ./src/modules/order --to en
+
+# 增量扫描（只处理变更文件，依赖 cache/scan-meta.json）
+tmigrate scan ./src --incremental
+```
+
+### 阶段二：人工确认 + 回写
+
+开发者校对映射文件中的翻译结果（设置 `approved: true` 或修改 `translation`），确认后回写源文件。
+
+```bash
+# 预览 diff（只处理 approved 的条目）
+tmigrate apply --dry-run
+
+# 只回写指定目录
+tmigrate apply --path src/modules/order
+
+# 实际写入
+tmigrate apply
+```
+
+### 回滚
+
+```bash
+# 回滚全部已应用的翻译
+tmigrate restore
+
+# 只回滚指定文件
+tmigrate restore --path src/views/login.vue
+```
+
+## 配置文件
+
+项目根目录的 `.tmigrate/config.json`：
+
+```jsonc
+{
+  // 源语言 / 目标语言
+  "sourceLocale": "zh",
+  "targetLocale": "en",
+
+  // 文件包含/排除规则
+  "include": ["src/**/*.{vue,ts,tsx,js,jsx,json,html}"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "**/i18n/**"
+  ],
+
+  // 过滤规则
+  "rules": [
+    { "type": "skip-context", "value": "console" },
+    { "type": "skip-context", "value": "comment" },
+    { "type": "skip-pattern", "value": "^[\\d\\s]+$" },
+    { "type": "skip-pattern", "value": "^[a-zA-Z]" },
+    { "type": "min-length", "value": 2 }
+  ],
+
+  // 翻译器配置
+  "translator": "local",   // "local" (ONNX) | "api" (外部翻译 API)
+  "translatorOptions": {
+    "modelBaseUrl": "https://cdn.example.com/models"
+  },
+  "batchSize": 20
+}
+```
+
+## 映射文件格式
+
+每个 map 文件对应一个源文件，路径由文件位置唯一确定（如 `src/views/login.vue` → `maps/src/views/login.vue.json`），无需在文件内重复记录源路径。
+
+```jsonc
+{
+  "version": 1,
+  "generatedAt": "2026-05-10T08:00:00Z",
+  "entries": {
+    "请输入用户名": {
+      "id": "a1b2c3d4",                 // 稳定 ID（hash of text + first location）
+      "translation": "Please enter your username",
+      "approved": false,
+      "skip": false,
+      "locations": [
+        { "file": "src/views/login.vue", "line": 12, "column": 8, "context": "template" },
+        { "file": "src/components/Form.vue", "line": 45, "column": 4, "context": "script" }
+      ]
+    },
+    "提交": {
+      "id": "e5f6g7h8",
+      "translation": "Submit",
+      "approved": true,
+      "skip": false,
+      "locations": [
+        { "file": "src/views/login.vue", "line": 28, "column": 12, "context": "template" }
+      ]
+    }
+  }
+}
+```
+
+### 字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `string` | 稳定 ID，由 `hash(text + firstLocation)` 生成。源文本微小改动时可通过 fuzzy matching 迁移旧 ID |
+| `translation` | `string` | 机器翻译结果，可人工修改 |
+| `approved` | `boolean` | `false` 时 `apply` 会跳过，需手动改为 `true` |
+| `skip` | `boolean` | 标记为 `true` 则永久跳过该条目（如无需翻译的枚举值） |
+| `locations` | `Location[]` | 该文本在项目中出现的所有位置 |
+| `context` | `string` | 出现位置的上下文类型，影响过滤规则的行为 |
+
+### ID 生成算法
+
+```
+id = hash(text + ":" + firstLocation.file + ":" + firstLocation.line)
+     .slice(0, 8)
+```
+
+当源文本发生微小变更时（如修正错别字），通过 fuzzy matching（编辑距离 ≤ 3）尝试关联旧 ID，保留已有的翻译和审批状态。
+
+## 术语表
+
+`.tmigrate/glossary.json` 定义高频词的固定翻译，机器翻译时优先使用：
+
+```jsonc
+{
+  "确定": "OK",           // 不用 "Confirm" 或 "Determine"
+  "取消": "Cancel",
+  "提交": "Submit",
+  "删除": "Delete",
+  "用户名": "Username",
+  "密码": "Password",
+  "手机号": "Phone Number",
+  // 支持上下文区分
+  "订单/状态/已激活": "Activated",
+  "用户/状态/已激活": "Active"
+}
+```
+
+上下文区分格式：`<模块>/<父级>/<原文>`，优先匹配更具体的规则。
+
+## 文件类型与解析策略
+
+| 文件类型 | 解析器 | 说明 |
+|---------|--------|------|
+| `.vue` | `@vue/compiler-sfc` + 子解析器 | 拆分为 template/script/style 后分别处理 |
+| `.ts` / `.tsx` | `@babel/parser` (AST) | 提取字符串字面量、模板字面量 |
+| `.js` / `.jsx` | `@babel/parser` (AST) | 同上 |
+| `.json` | `JSON.parse` | 递归遍历所有 string value |
+| `.html` | `parse5` | 提取文本节点和可翻译属性 |
+| `.css` / `.scss` / `.less` | 正则 | 只处理 `content` 属性值 |
+| `.md` | 正则 / remark | 提取段落文本，跳过代码块 |
+| `.yaml` / `.yml` | `yaml` 库 | 提取 string value |
+
+## Vue SFC 解析细节
+
+Vue 单文件组件有三种区域，解析方式不同：
+
+```typescript
+import { parse } from '@vue/compiler-sfc'
+
+const { descriptor } = parse(content, { sourceMap: true })
+
+// template → HTML parser，提取文本节点和属性
+// script / script-setup → TS/JS AST parser
+// style → 只处理 content: "中文" 属性
+```
+
+## 占位符保护
+
+含插值的字符串需要保护插值表达式不被翻译：
+
+```
+输入:   "共 ${total} 条记录，已读 ${read} 条"
+保护:   "共 __TM_0__ 条记录，已读 __TM_1__ 条"
+翻译:   "Total __TM_0__ records, __TM_1__ read"
+还原:   "Total ${total} records, ${read} read"
+```
+
+支持的插值模式：
+- Vue 模板：`{{ expression }}`
+- JS 模板字面量：`${expression}`
+- 自定义占位符：通过配置扩展
+
+## 哪些中文该翻译，哪些不该
+
+| 类型 | 示例 | 处理 |
+|------|------|------|
+| UI 文本 | `"请输入用户名"` | 翻译 |
+| 按钮文字 | `<button>提交</button>` | 翻译 |
+| 注释 | `// 初始化路由` | 默认跳过，可配置 |
+| console 输出 | `console.log('请求失败')` | 默认跳过，可配置 |
+| 枚举值 / key | `status: '已激活'` | 跳过（会破坏逻辑） |
+| 测试数据 | `expect(result).toBe('成功')` | 跳过 |
+| JSON key | `{ "用户名": "..." }` | 可配置 |
+| 单字 | `"中"` | 跳过（min-length 过滤） |
+
+## 过滤规则
+
+规则在 `config.json` 的 `rules` 数组中定义，按顺序执行，第一个匹配的规则决定处理方式：
+
+```jsonc
+{
+  "rules": [
+    // 上下文跳过：在 console.log / 注释中的中文直接跳过
+    { "type": "skip-context", "value": "console" },
+    { "type": "skip-context", "value": "comment" },
+
+    // 正则跳过：纯数字、以英文字母开头的字符串
+    { "type": "skip-pattern", "value": "^[\\d\\s]+$" },
+    { "type": "skip-pattern", "value": "^[a-zA-Z]" },
+
+    // 最小长度：少于 2 个字符的中文跳过
+    { "type": "min-length", "value": 2 },
+
+    // 强制翻译：匹配的文本即使在 skip-context 中也翻译
+    { "type": "force-pattern", "value": "^(提示|说明|注意)" }
+  ]
+}
+```
+
+| 规则类型 | 说明 |
+|---------|------|
+| `skip-context` | 跳过指定上下文中的文本（`console`、`comment`、`enum`、`test`） |
+| `skip-pattern` | 跳过匹配正则的文本 |
+| `force-pattern` | 强制翻译匹配的文本（优先级高于 skip-context） |
+| `min-length` | 跳过短于指定长度的中文文本 |
+| `max-length` | 跳过长于指定长度的中文文本（可能是日志或数据） |
+
+## `.gitignore` 建议
+
+根据团队协作需求选择：
+
+```gitignore
+# 方案 A：只提交配置和术语表，映射文件不提交（各人本地生成）
+.tmigrate/maps/
+.tmigrate/cache/
+
+# 方案 B：全部提交（团队共享翻译进度，推荐）
+# 不添加额外 gitignore 规则
+
+# 方案 C：只提交已审批的条目（需要 CI 脚本过滤）
+# .tmigrate/maps/
+```
+
+## 增量扫描机制
+
+`.tmigrate/cache/scan-meta.json` 记录每个源文件的 hash 和最后扫描时间：
+
+```jsonc
+{
+  "src/views/login.vue": {
+    "hash": "a1b2c3d4...",
+    "lastScanned": "2026-05-10T08:00:00Z",
+    "mapFile": "src/views/login.vue.json"
+  }
+}
+```
+
+`tmigrate scan --incremental` 时：
+1. 读取 `scan-meta.json`
+2. 计算当前文件 hash
+3. 跳过 hash 未变的文件
+4. 对变更文件重新提取，**合并**已有映射（保留 approved 状态和人工修改的 translation）
+5. 更新 `scan-meta.json`
+
+合并策略：
+- 新增的中文文本 → 添加新 entry（`approved: false`）
+- 已删除的中文文本 → 标记为 `deprecated`（不自动删除，人工确认）
+- 文本微小变更 → fuzzy matching 关联旧 ID，保留翻译
+- 文本完全变更 → 新 ID，旧 entry 标记 `deprecated`
+
+## 包结构
+
+```
+packages/i18n-migrate-cli/
+├── src/
+│   ├── index.ts                 # 公共 API
+│   ├── cli.ts                   # CLI 命令注册
+│   ├── init.ts                  # init 命令（目录生成 + 交互式配置）
+│   ├── scanner.ts               # 文件扫描（glob + 过滤 + 增量）
+│   ├── types.ts                 # 类型定义
+│   ├── config.ts                # 配置文件读取与合并
+│   ├── parsers/
+│   │   ├── parser.ts            # Parser 接口定义
+│   │   ├── vue.ts               # Vue SFC 解析器
+│   │   ├── script.ts            # TS/JS AST 解析器
+│   │   ├── json.ts              # JSON 解析器
+│   │   ├── html.ts              # HTML 解析器
+│   │   ├── css.ts               # CSS 解析器
+│   │   ├── markdown.ts          # Markdown 解析器
+│   │   └── yaml.ts              # YAML 解析器
+│   ├── extractor.ts             # 文本提取编排器
+│   ├── translator-pipeline.ts   # 翻译流水线（批量 + 占位符保护）
+│   ├── replacer.ts              # AST 级回写器
+│   ├── mapping.ts               # 分片映射文件读写 + 合并
+│   ├── cache.ts                 # 增量扫描缓存管理
+│   ├── glossary.ts              # 术语表加载与匹配
+│   ├── reporter.ts              # 变更报告生成
+│   └── utils/
+│       ├── placeholder.ts       # 占位符保护/还原
+│       ├── chinese-detector.ts  # 中文检测
+│       ├── id-generator.ts      # 稳定 ID 生成
+│       └── filter.ts            # 文件/文本过滤规则引擎
+├── bin/
+│   └── tmigrate.ts              # bin 入口
+├── package.json
+├── tsconfig.json
+└── tsdown.config.ts
+```
+
+## Parser 接口
+
+```typescript
+interface TextSegment {
+  /** 稳定 ID，hash(text + firstLocation) */
+  id: string
+  /** 原始中文文本 */
+  text: string
+  /** 在文件中的位置 */
+  start: number
+  end: number
+  line: number
+  column: number
+  /** 上下文类型 */
+  context: 'template' | 'script' | 'style'
+         | 'json-value' | 'html-text' | 'html-attr'
+         | 'markdown' | 'yaml-value'
+  /** 插值信息（如果文本包含插值表达式） */
+  interpolation?: {
+    pattern: string       // 原始插值模式，如 "${...}" 或 "{{ ... }}"
+    segments: string[]    // 保护后的占位符段
+  }
+  /** AST 节点类型 */
+  nodeType: string
+}
+
+interface FileParser {
+  /** 支持的文件扩展名 */
+  supportedExtensions: string[]
+  /** 从文件内容中提取中文文本 */
+  extract(content: string, filePath: string): TextSegment[]
+  /** 将翻译结果回写到文件内容 */
+  replace(content: string, segments: TextSegment[], translations: Map<string, string>): string
+}
+```
+
+## 依赖
+
+```jsonc
+{
+  "dependencies": {
+    "@translation-master/core": "workspace:*",
+    "@translation-master/node": "workspace:*",
+    "@vue/compiler-sfc": "^3.5",
+    "@babel/parser": "^7.26",
+    "parse5": "^7.2",
+    "yaml": "^2.6",
+    "globby": "^14.0",
+    "picocolors": "^1.1",
+    "commander": "^12.0"
+  }
+}
+```
+
+## 与现有架构的关系
+
+```
+@translation-master/core              ← 复用 Translator, detectLanguage
+@translation-master/node              ← 复用 Node Translator (ONNX CPU)
+@translation-master/i18n-migrate-cli  ← 新包，文件扫描/解析/分片映射/回写
+```
+
+## 已识别的风险与缓解
+
+### 翻译精度
+
+机器翻译对短 UI 文本表现不佳（"确定" → "OK" vs "Confirm" vs "Determine"）。缓解措施：
+- 两阶段工作流允许人工校对
+- 术语表（`glossary.json`）高频词预设翻译
+- 映射文件可跨项目复用
+
+### 误翻译
+
+源码中的中文并非都是用户可见文本。缓解措施：
+- 上下文感知（console/comment/enum 不同处理）
+- 可配置的过滤规则
+- 默认跳过测试文件
+
+### 插值破坏
+
+直接翻译含插值的字符串会破坏表达式。缓解措施：
+- 占位符保护机制
+- AST 级替换保证精度
+
+### 不可逆
+
+源文件直接修改风险高。缓解措施：
+- `--dry-run` 模式预览
+- `restore` 命令回滚
+- 映射文件保留原始文本
+- `cache/scan-meta.json` 记录文件 hash，可检测非翻译导致的变更
+
+### 大规模项目性能
+
+万级文件扫描和翻译耗时长。缓解措施：
+- 增量扫描（`--incremental`），跳过未变更文件
+- 分片映射，`apply` 可按目录/模块独立执行
+- 批量翻译流水线，可配置 `batchSize`
+
+## 实施阶段
+
+| 阶段 | 内容 | 预估 |
+|------|------|------|
+| P0 | 文件扫描 + Vue template/JS/TS 提取 + `.tmigrate/maps/` 分片写入 | 2-3 天 |
+| P0 | 集成 ONNX 翻译 + 批量翻译 + 术语表 | 1 天 |
+| P0 | AST 级回写 + dry-run + diff 预览 | 2 天 |
+| P1 | CLI 封装 + `init` 命令 + config.json 配置 | 1 天 |
+| P1 | 占位符保护（插值字符串） | 1 天 |
+| P1 | JSON / HTML / CSS / Markdown / YAML 解析器 | 1-2 天 |
+| P2 | 过滤规则引擎 | 1 天 |
+| P2 | 增量扫描 + cache 机制 | 1 天 |
+| P2 | 回滚能力 + 补丁文件生成 | 1 天 |
+| P2 | 术语表 + 上下文感知翻译 + fuzzy ID 迁移 | 2 天 |
