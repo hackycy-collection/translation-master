@@ -6,5 +6,5 @@ export default defineConfig({
   dts: true,
   exports: true,
   publint: true,
-  external: ['@huggingface/transformers'],
+  external: ['@huggingface/transformers', '@translation-master/core'],
 })

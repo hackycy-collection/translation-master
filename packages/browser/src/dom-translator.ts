@@ -1,11 +1,10 @@
 import type { DOMTranslateProgressEvent, DOMTranslatorOptions, TextGroup } from './dom-types'
 import type { Translator } from './translator'
-import { TranslationResultCache } from './cache'
+import { detectLanguage, TranslationResultCache } from '@translation-master/core'
 import { DOMObserver } from './dom-observer'
 import { DOMRenderer } from './dom-renderer'
 import { DOMViewport } from './dom-viewport'
 import { DOMWalker } from './dom-walker'
-import { detectLanguage } from './lang'
 
 /**
  * DOMTranslator provides automatic translation of web page content.

@@ -1,6 +1,6 @@
 export interface TranslatorOptions {
   /** Backend device, default 'wasm' */
-  device?: 'auto' | 'wasm' | 'webgpu'
+  device?: 'auto' | 'wasm' | 'webgpu' | 'cpu'
   /** Quantization precision, default 'q8' */
   dtype?: 'fp32' | 'fp16' | 'q8' | 'q4'
   /** Custom model configs, uses built-in list if omitted */
@@ -9,19 +9,6 @@ export interface TranslatorOptions {
   maxPoolSize?: number
   /** Auto detect source language, default true */
   autoDetect?: boolean
-  /**
-   * Run model inference in a Web Worker to keep the main thread free.
-   * - `true` — always use worker (throws if Workers unavailable)
-   * - `false` — always run on main thread
-   * - `'auto'` (default) — use worker when available, fallback to main thread
-   */
-  useWorker?: boolean | 'auto'
-  /**
-   * Custom URL for the translation worker script.
-   * Only used when useWorker is enabled.
-   * Default: auto-resolved from the package's bundled worker entry.
-   */
-  workerUrl?: URL | string
   /**
    * Custom base URL for loading model files.
    * When set, models are fetched from `{modelBaseUrl}/{modelId}/resolve/main/`
@@ -40,8 +27,6 @@ export interface TranslatorOptions {
    * ```
    */
   modelBaseUrl?: string
-  /** Enable built-in toast progress UI, default true */
-  ui?: boolean
   /** Enable debug mode for full result metadata, default false */
   debug?: boolean
   /** @deprecated Use events.on('modelLoad', ...) instead */

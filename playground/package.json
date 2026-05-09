@@ -6,9 +6,9 @@
     "dev": "vite"
   },
   "devDependencies": {
-    "translation-master": "workspace:^",
+    "@translation-master/browser": "workspace:^",
+    "@translation-master/vite-plugin": "workspace:^",
     "vite": "catalog:cli",
-    "vite-plugin-inspect": "^11.1.0",
-    "vite-plugin-translate": "workspace:^"
+    "vite-plugin-inspect": "^11.1.0"
   }
 }

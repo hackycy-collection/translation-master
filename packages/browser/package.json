@@ -1,0 +1,46 @@
+{
+  "name": "@translation-master/browser",
+  "type": "module",
+  "version": "0.0.1",
+  "description": "Browser translation library with DOM support, powered by Transformers.js",
+  "author": "hackycy <hackycy@outlook.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/hackycy-collection/translation-master#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hackycy-collection/translation-master.git"
+  },
+  "bugs": "https://github.com/hackycy-collection/translation-master/issues",
+  "keywords": [],
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./worker": {
+      "import": "./dist/worker.mjs",
+      "require": "./dist/worker.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint": "eslint",
+    "prepublishOnly": "nr build",
+    "release": "bumpp",
+    "test": "vitest",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.8.0",
+    "@translation-master/core": "workspace:*"
+  }
+}

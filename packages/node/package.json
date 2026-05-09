@@ -1,8 +1,8 @@
 {
-  "name": "translation-master",
+  "name": "@translation-master/node",
   "type": "module",
   "version": "0.0.1",
-  "description": "Pure frontend WASM translation library powered by Transformers.js",
+  "description": "Node.js translation library powered by Transformers.js with ONNX Runtime",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
   "homepage": "https://github.com/hackycy-collection/translation-master#readme",
@@ -17,10 +17,6 @@
     ".": {
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
-    },
-    "./worker": {
-      "import": "./dist/worker.mjs",
-      "require": "./dist/worker.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -40,6 +36,7 @@
     "typecheck": "tsc"
   },
   "dependencies": {
-    "@huggingface/transformers": "^3.8.0"
+    "@huggingface/transformers": "^3.8.0",
+    "@translation-master/core": "workspace:*"
   }
 }

@@ -1,8 +1,6 @@
 packages:
   - playground
-  - docs
   - packages/*
-  - examples/*
 catalogMode: prefer
 
 catalogs:

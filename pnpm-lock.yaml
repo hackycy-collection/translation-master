@@ -117,13 +117,31 @@ importers:
         specifier: catalog:testing
         version: 2.8.1
 
-  packages/translation-master:
+  packages/browser:
+    dependencies:
+      '@huggingface/transformers':
+        specifier: ^3.8.0
+        version: 3.8.1
+      '@translation-master/core':
+        specifier: workspace:*
+        version: link:../core
+
+  packages/core:
     dependencies:
       '@huggingface/transformers':
         specifier: ^3.8.0
         version: 3.8.1
 
-  packages/vite-plugin-translate:
+  packages/node:
+    dependencies:
+      '@huggingface/transformers':
+        specifier: ^3.8.0
+        version: 3.8.1
+      '@translation-master/core':
+        specifier: workspace:*
+        version: link:../core
+
+  packages/vite-plugin:
     devDependencies:
       vite:
         specifier: catalog:cli
@@ -131,18 +149,18 @@ importers:
 
   playground:
     devDependencies:
-      translation-master:
+      '@translation-master/browser':
         specifier: workspace:^
-        version: link:../packages/translation-master
+        version: link:../packages/browser
+      '@translation-master/vite-plugin':
+        specifier: workspace:^
+        version: link:../packages/vite-plugin
       vite:
         specifier: catalog:cli
         version: 7.2.1(@types/node@24.10.0)(jiti@2.6.0)(lightningcss@1.32.0)(tsx@4.20.6)(yaml@2.8.1)
       vite-plugin-inspect:
         specifier: ^11.1.0
         version: 11.3.3(vite@7.2.1(@types/node@24.10.0)(jiti@2.6.0)(lightningcss@1.32.0)(tsx@4.20.6)(yaml@2.8.1))
-      vite-plugin-translate:
-        specifier: workspace:^
-        version: link:../packages/vite-plugin-translate
 
 packages:
 

@@ -1,6 +1,6 @@
-import type { TranslateOptions, TranslateResult, TranslateResultMinimal, TranslatorOptions } from './types'
+import type { TranslateOptions, TranslateResult, TranslateResultMinimal, TranslatorOptions } from '@translation-master/core'
 import type { WorkerMessage, WorkerResponse } from './worker'
-import { TranslatorEventEmitter } from './event-emitter'
+import { TranslatorEventEmitter } from '@translation-master/core'
 
 interface PendingRequest {
   resolve: (value: unknown) => void

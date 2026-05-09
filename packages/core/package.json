@@ -1,8 +1,8 @@
 {
-  "name": "vite-plugin-translate",
+  "name": "@translation-master/core",
   "type": "module",
-  "version": "0.0.6",
-  "description": "Vite plugin for translate.js",
+  "version": "0.0.1",
+  "description": "Runtime-agnostic translation core powered by Transformers.js",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
   "homepage": "https://github.com/hackycy-collection/translation-master#readme",
@@ -18,17 +18,12 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
-    "./helper": {
-      "import": "./dist/helper.mjs",
-      "require": "./dist/helper.cjs"
-    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.cts",
   "files": [
-    "bundle",
     "dist"
   ],
   "scripts": {
@@ -37,14 +32,15 @@
     "lint": "eslint",
     "prepublishOnly": "nr build",
     "release": "bumpp",
-    "start": "tsx src/index.ts",
     "test": "vitest",
     "typecheck": "tsc"
   },
   "peerDependencies": {
-    "vite": ">=5"
+    "@huggingface/transformers": "^3.8.0"
   },
-  "devDependencies": {
-    "vite": "catalog:cli"
+  "peerDependenciesMeta": {
+    "@huggingface/transformers": {
+      "optional": true
+    }
   }
 }

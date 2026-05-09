@@ -1,0 +1,50 @@
+{
+  "name": "@translation-master/vite-plugin",
+  "type": "module",
+  "version": "0.0.6",
+  "description": "Vite plugin for translate.js",
+  "author": "hackycy <hackycy@outlook.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/hackycy-collection/translation-master#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hackycy-collection/translation-master.git"
+  },
+  "bugs": "https://github.com/hackycy-collection/translation-master/issues",
+  "keywords": [],
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./helper": {
+      "import": "./dist/helper.mjs",
+      "require": "./dist/helper.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
+  "files": [
+    "bundle",
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint": "eslint",
+    "prepublishOnly": "nr build",
+    "release": "bumpp",
+    "start": "tsx src/index.ts",
+    "test": "vitest",
+    "typecheck": "tsc"
+  },
+  "peerDependencies": {
+    "vite": ">=5"
+  },
+  "devDependencies": {
+    "vite": "catalog:cli"
+  }
+}

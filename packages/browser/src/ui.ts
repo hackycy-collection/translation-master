@@ -1,4 +1,4 @@
-import type { ModelLoadEvent, TranslatorEventEmitter } from './event-emitter'
+import type { ModelLoadEvent, TranslatorEventEmitter } from '@translation-master/core'
 
 const STYLE_ID = 'translator-toast-style'
 const CONTAINER_ID = 'translator-toast-container'

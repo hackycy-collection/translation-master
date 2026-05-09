@@ -1,47 +1,33 @@
-import type { DOMTranslatorOptions } from './dom-types'
 import type { PipelineInstance } from './model-pool'
 import type { ModelLoadProgress, ResolvedModel, TranslateOptions, TranslateResult, TranslateResultMinimal, TranslatorOptions } from './types'
 import { TranslationResultCache } from './cache'
-import { isSSR, isWorker, isWorkerSupported, resolveDevice } from './env'
 import { TranslatorEventEmitter } from './event-emitter'
 import { detectLanguage, getSupportedLanguages, normalizeLang } from './lang'
 import { ModelPool } from './model-pool'
 import { ModelRouter } from './model-router'
-import { ToastUI } from './ui'
+
+/**
+ * Transformers module loader function.
+ * Runtime packages (browser/node) provide their own loader.
+ */
+export type TransformersLoader = () => Promise<typeof import('@huggingface/transformers')>
 
 export class Translator {
-  private router: ModelRouter
+  protected router: ModelRouter
   private pool: ModelPool
   private resultCache: TranslationResultCache
-  private device: TranslatorOptions['device']
-  private dtype: TranslatorOptions['dtype']
-  private autoDetect: boolean
+  protected device: TranslatorOptions['device']
+  protected dtype: TranslatorOptions['dtype']
+  protected autoDetect: boolean
   private debug: boolean
-  private modelBaseUrl?: string
+  protected modelBaseUrl?: string
   private transformersModule: typeof import('@huggingface/transformers') | null = null
+  private transformersLoader: TransformersLoader | null = null
 
   /** Event emitter for modelLoad, translate, error events */
   readonly events: TranslatorEventEmitter
 
-  /** Built-in toast UI */
-  private toastUI: ToastUI | null = null
-
-  /** DOM translator instance (lazy) */
-  private _domTranslator: import('./dom-translator').DOMTranslator | null = null
-
-  /** Web Worker translator for off-main-thread inference (lazy) */
-  private _workerTranslator: import('./worker-translator').WorkerTranslator | null = null
-  private _useWorker: boolean
-  private _workerUrl?: URL | string
-
-  constructor(options?: TranslatorOptions) {
-    if (isSSR()) {
-      throw new Error(
-        '[translation-master] SSR environment detected. Translator requires a browser environment with WebGPU/WASM support. '
-        + 'If you are using Next.js/Nuxt, ensure Translator is only instantiated on the client side.',
-      )
-    }
-
+  constructor(options?: TranslatorOptions & { transformersLoader?: TransformersLoader }) {
     this.router = new ModelRouter(options?.models)
     this.pool = ModelPool.getShared(options?.maxPoolSize ?? 3)
     this.resultCache = new TranslationResultCache()
@@ -51,16 +37,7 @@ export class Translator {
     this.debug = options?.debug ?? false
     this.modelBaseUrl = options?.modelBaseUrl
     this.events = new TranslatorEventEmitter()
-
-    // Determine whether to use Web Worker for inference
-    const useWorkerOpt = options?.useWorker ?? 'auto'
-    this._useWorker = useWorkerOpt === true
-      || (useWorkerOpt === 'auto' && isWorkerSupported() && !isWorker())
-    this._workerUrl = options?.workerUrl
-
-    // Toast UI (enabled by default)
-    const uiEnabled = options?.ui !== false
-    this.toastUI = new ToastUI(this.events, uiEnabled)
+    this.transformersLoader = options?.transformersLoader ?? null
 
     // Backward compat: wire up deprecated onModelLoadProgress
     if (options?.onModelLoadProgress) {
@@ -69,57 +46,9 @@ export class Translator {
   }
 
   /**
-   * Lazily initialize the worker translator.
-   * Returns null if worker mode is disabled.
-   */
-  private async getWorkerTranslator(): Promise<import('./worker-translator').WorkerTranslator | null> {
-    if (!this._useWorker)
-      return null
-
-    if (!this._workerTranslator) {
-      try {
-        const { WorkerTranslator } = await import('./worker-translator')
-        this._workerTranslator = new WorkerTranslator({
-          device: this.device,
-          dtype: this.dtype,
-          models: this.router.getConfigs(),
-          autoDetect: this.autoDetect,
-          workerUrl: this._workerUrl,
-          modelBaseUrl: this.modelBaseUrl,
-        })
-        // Forward events from worker to main event emitter
-        this._workerTranslator.events.on('modelLoad', e => this.events.emit('modelLoad', e))
-        this._workerTranslator.events.on('translate', e => this.events.emit('translate', e))
-        this._workerTranslator.events.on('error', e => this.events.emit('error', e))
-      }
-      catch {
-        // Worker unavailable (e.g., bundled file not found during dev) — fall back to main thread
-        this._useWorker = false
-        return null
-      }
-    }
-
-    return this._workerTranslator
-  }
-
-  /**
    * Translate text from source language to target language.
    */
   async translate(text: string, options: TranslateOptions): Promise<TranslateResult & TranslateResultMinimal> {
-    // Delegate to worker if available — inference runs off main thread
-    const worker = await this.getWorkerTranslator()
-    if (worker) {
-      try {
-        return await worker.translate(text, options)
-      }
-      catch {
-        // Worker failed (e.g., failed to load) — fall back to main thread
-        this._useWorker = false
-        await worker.dispose().catch(() => {})
-        this._workerTranslator = null
-      }
-    }
-
     const startTime = Date.now()
     const to = normalizeLang(options.to)
 
@@ -168,20 +97,6 @@ export class Translator {
     texts: string[],
     options: TranslateOptions,
   ): Promise<TranslateResult[]> {
-    // Delegate to worker if available — inference runs off main thread
-    const worker = await this.getWorkerTranslator()
-    if (worker) {
-      try {
-        return await worker.translateBatch(texts, options)
-      }
-      catch {
-        // Worker failed — fall back to main thread
-        this._useWorker = false
-        await worker.dispose().catch(() => {})
-        this._workerTranslator = null
-      }
-    }
-
     const to = normalizeLang(options.to)
 
     let from: string
@@ -252,10 +167,6 @@ export class Translator {
    * Preload the model for a given language pair.
    */
   async preload(from: string, to: string): Promise<void> {
-    const worker = await this.getWorkerTranslator()
-    if (worker) {
-      return worker.preload(from, to)
-    }
     const resolved = this.router.resolve(from, to)
     await this.getPipeline(resolved)
   }
@@ -283,90 +194,11 @@ export class Translator {
   }
 
   /**
-   * Translate the entire page or a specific DOM element.
-   *
-   * Walks the DOM, collects translatable text, translates it using WASM models,
-   * and writes the translated text back while preserving HTML structure.
-   * Original text is preserved and can be restored with `restorePage()`.
-   *
-   * @param options DOM translation options
-   *
-   * @example
-   * ```ts
-   * const translator = new Translator()
-   * await translator.translatePage({ to: 'en' })
-   * // Later: restore original text
-   * translator.restorePage()
-   * ```
-   */
-  async translatePage(options: DOMTranslatorOptions & { root?: Element }): Promise<void> {
-    const { DOMTranslator } = await import('./dom-translator')
-    if (!this._domTranslator) {
-      this._domTranslator = new DOMTranslator(this)
-    }
-
-    // Wire up progress events to the event emitter
-    const originalOnProgress = options.onProgress
-    const wrappedOptions: typeof options = {
-      ...options,
-      onProgress: (event) => {
-        this.events.emit('domTranslate', {
-          phase: event.phase,
-          translatedGroups: event.translatedGroups ?? 0,
-          totalGroups: event.totalGroups ?? 0,
-          currentBatch: event.currentBatch,
-          totalBatches: event.totalBatches,
-        })
-        originalOnProgress?.(event)
-      },
-    }
-
-    return this._domTranslator.translatePage(wrappedOptions)
-  }
-
-  /**
-   * Restore all DOM content translated by `translatePage()` back to original text.
-   */
-  restorePage(): void {
-    this._domTranslator?.restore()
-  }
-
-  /**
-   * Start observing DOM changes for automatic incremental translation.
-   * Must be called after `translatePage()`.
-   */
-  startDOMObserver(options?: { debounceMs?: number, root?: Element }): void {
-    this._domTranslator?.startObserver(options)
-  }
-
-  /**
-   * Stop the DOM change observer.
-   */
-  stopDOMObserver(): void {
-    this._domTranslator?.stopObserver()
-  }
-
-  /**
-   * Cancel an in-progress DOM translation. Already translated nodes are restored.
-   */
-  cancelPageTranslation(): void {
-    this._domTranslator?.cancel()
-  }
-
-  /**
-   * Dispose all models, clear caches, and remove toast UI.
+   * Dispose all models, clear caches.
    */
   async dispose(): Promise<void> {
-    this._domTranslator?.dispose()
-    this._domTranslator = null
-    if (this._workerTranslator) {
-      await this._workerTranslator.dispose()
-      this._workerTranslator = null
-    }
     await this.pool.disposeAll()
     this.resultCache.clear()
-    this.toastUI?.destroy()
-    this.toastUI = null
     this.events.removeAllListeners()
   }
 
@@ -382,7 +214,7 @@ export class Translator {
    */
   private async getPipeline(resolved: ResolvedModel): Promise<PipelineInstance> {
     const tf = await this.loadTransformers()
-    const device = await resolveDevice(this.device ?? 'wasm')
+    const device = await this.resolveDevice(this.device ?? 'wasm')
 
     const options: Record<string, unknown> = {
       device,
@@ -412,7 +244,7 @@ export class Translator {
       progressCallback,
     )
 
-    // Pipeline is fully loaded — emit 'ready' so the toast can dismiss
+    // Pipeline is fully loaded — emit 'ready' so listeners can react
     this.events.emit('modelLoad', {
       modelId: resolved.modelId,
       progress: 100,
@@ -480,11 +312,18 @@ export class Translator {
   }
 
   /**
-   * Lazily load the @huggingface/transformers module.
+   * Lazily load the transformers module.
+   * Uses the provided loader, or dynamically imports @huggingface/transformers.
    */
   private async loadTransformers(): Promise<typeof import('@huggingface/transformers')> {
     if (!this.transformersModule) {
-      const tf = await import('@huggingface/transformers')
+      if (!this.transformersLoader) {
+        throw new Error(
+          '[translation-master] No transformers loader provided. '
+          + 'Either pass a `transformersLoader` option or use the browser/node package.',
+        )
+      }
+      const tf = await this.transformersLoader()
       if (this.modelBaseUrl) {
         tf.env.allowLocalModels = true
         tf.env.localModelPath = this.modelBaseUrl
@@ -492,5 +331,16 @@ export class Translator {
       this.transformersModule = tf
     }
     return this.transformersModule
+  }
+
+  /**
+   * Resolve the device to use for inference.
+   * Default: prefer wasm, no auto-detection.
+   * Browser package overrides with WebGPU detection.
+   */
+  protected async resolveDevice(requested: string): Promise<string> {
+    if (requested !== 'auto')
+      return requested
+    return 'wasm'
   }
 }

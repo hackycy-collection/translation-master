@@ -1,4 +1,4 @@
-import type { TranslateOptions, TranslatorOptions } from './types'
+import type { TranslateOptions, TranslatorOptions } from '@translation-master/core'
 import { Translator } from './translator'
 
 export interface WorkerMessage {

@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
+import TranslatePlugin from '@translation-master/vite-plugin'
 import { defineConfig } from 'vite'
-import TranslatePlugin from 'vite-plugin-translate'
 
 export default defineConfig({
   base: './',
