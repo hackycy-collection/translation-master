@@ -1,4 +1,11 @@
-import type { MigrateConfig } from './types'
+import type { MigrateConfig, TranslatorOptions } from './types'
+import path from 'node:path'
+import process from 'node:process'
+import { readJsonFile } from './fs-utils'
+
+export type MigrateConfigInput = Omit<Partial<MigrateConfig>, 'translatorOptions'> & {
+  translatorOptions?: Partial<TranslatorOptions>
+}
 
 export const DEFAULT_CONFIG: MigrateConfig = {
   sourceLocale: 'zh',
@@ -31,7 +38,7 @@ export const DEFAULT_CONFIG: MigrateConfig = {
   batchSize: 20,
 }
 
-export function defineConfig(config: Partial<MigrateConfig>): MigrateConfig {
+export function defineConfig(config: MigrateConfigInput): MigrateConfig {
   return {
     ...DEFAULT_CONFIG,
     ...config,
@@ -40,4 +47,17 @@ export function defineConfig(config: Partial<MigrateConfig>): MigrateConfig {
       ...config.translatorOptions,
     },
   }
+}
+
+export async function loadConfig(cwd = process.cwd(), overrides: MigrateConfigInput = {}): Promise<MigrateConfig> {
+  const configPath = path.join(cwd, '.tmigrate', 'config.json')
+  const config = await readJsonFile<MigrateConfigInput>(configPath, {})
+  return defineConfig({
+    ...config,
+    ...overrides,
+    translatorOptions: {
+      ...config.translatorOptions,
+      ...overrides.translatorOptions,
+    },
+  })
 }

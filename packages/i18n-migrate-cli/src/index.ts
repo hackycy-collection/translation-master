@@ -1,14 +1,37 @@
-export { DEFAULT_CONFIG, defineConfig } from './config'
-export { createEntry, createMapFile, mergeMapEntries } from './mapping'
+export { applyTranslations, restoreBackups } from './apply'
+export { backupFile, listBackupEntries, loadBackupMeta, saveBackupMeta } from './backup'
+export { loadScanMeta, saveScanMeta } from './cache'
+export { createCli } from './cli'
+export { DEFAULT_CONFIG, defineConfig, loadConfig } from './config'
+export { Extractor } from './extractor'
+export { loadGlossary, matchGlossary } from './glossary'
+export { initProject } from './init'
+export { createEntry, createMapFile, mergeMapEntries, readMapFile, writeMapFile } from './mapping'
 export { mapPathToSourcePath, sourcePathToMapPath, toPosixPath } from './paths'
+export { createUnifiedDiff } from './reporter'
+export { scanProject } from './scanner'
+export { createTranslator } from './translator'
+export { ApiTranslator } from './translator/api'
+export type { TranslateOptions as CliTranslateOptions, TranslateResult as CliTranslateResult, Translator as CliTranslator } from './translator/interface'
+export { LocalTranslator } from './translator/local'
+export { translateTexts } from './translator/pipeline'
 export type {
+  ApplyOptions,
+  ApplyResult,
+  BackupMeta,
+  BackupMetaEntry,
+  FileChange,
   FileParser,
   FilterRule,
   Location,
   MapFile,
   MigrateConfig,
+  RestoreOptions,
+  RestoreResult,
   ScanMeta,
   ScanMetaEntry,
+  ScanOptions,
+  ScanResult,
   TextContext,
   TextSegment,
   TranslateOptions,

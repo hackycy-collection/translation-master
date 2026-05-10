@@ -62,6 +62,18 @@ export interface ScanMeta {
   [filePath: string]: ScanMetaEntry
 }
 
+export interface BackupMetaEntry {
+  sourcePath: string
+  backupPath: string
+  backedUpAt: string
+  batchId: string
+}
+
+export interface BackupMeta {
+  version: 1
+  backups: Record<string, BackupMetaEntry>
+}
+
 export type FilterRule
   = | { type: 'skip-context', value: TextContext }
     | { type: 'skip-pattern', value: string }
@@ -113,4 +125,49 @@ export interface FileParser {
     segments: TextSegment[],
     translations: Map<string, TranslationEntry>,
   ) => { content: string, sourceMap?: object }
+}
+
+export interface ScanOptions {
+  cwd?: string
+  path?: string
+  to?: string
+  incremental?: boolean
+  cleanDeprecated?: boolean
+  translator?: Translator
+}
+
+export interface ScanResult {
+  scannedFiles: number
+  skippedFiles: number
+  extractedTexts: number
+  mapFiles: string[]
+}
+
+export interface ApplyOptions {
+  cwd?: string
+  path?: string
+  dryRun?: boolean
+}
+
+export interface FileChange {
+  sourcePath: string
+  changed: boolean
+  applied: number
+  diff?: string
+}
+
+export interface ApplyResult {
+  files: FileChange[]
+  dryRun: boolean
+}
+
+export interface RestoreOptions {
+  cwd?: string
+  path?: string
+  list?: boolean
+}
+
+export interface RestoreResult {
+  restored: string[]
+  available: BackupMetaEntry[]
 }
