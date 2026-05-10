@@ -485,7 +485,8 @@ packages/i18n-migrate-cli/
 │   │   ├── html.ts              # HTML 解析器
 │   │   ├── css.ts               # CSS 解析器
 │   │   ├── markdown.ts          # Markdown 解析器
-│   │   └── yaml.ts              # YAML 解析器
+│   │   ├── yaml.ts              # YAML 解析器
+│   │   └── range.ts             # 区间提取/回写共享工具
 │   ├── extractor.ts             # 文本提取编排器
 │   ├── translator/
 │   │   ├── interface.ts         # Translator 抽象接口
@@ -493,7 +494,7 @@ packages/i18n-migrate-cli/
 │   │   ├── local.ts             # 复用 @translation-master/node 的本地翻译器
 │   │   ├── api.ts               # 外部 API 翻译器适配
 │   │   └── pipeline.ts          # 翻译流水线（批量调度、并发控制、重试）
-│   ├── replacer.ts              # AST 级回写器
+│   ├── replacer.ts              # 源码区间回写器
 │   ├── apply.ts                 # apply / restore 命令编排
 │   ├── backup.ts                # apply 前自动备份 + restore 回滚
 │   ├── mapping.ts               # 分片映射文件读写 + 合并
@@ -512,8 +513,6 @@ packages/i18n-migrate-cli/
 ├── tsconfig.json
 └── tsdown.config.ts
 ```
-
-> 实现说明：当前 `parsers/*.ts` 已按文件类型拆分为稳定入口，内部复用同一套轻量源码区间提取/回写逻辑，保证 CLI 工作流先完整闭环。后续如果需要更强 AST 精度，可在对应 parser 文件内替换实现，不影响 `Extractor` / `Replacer` / CLI 命令接口。
 
 ## Parser 接口
 

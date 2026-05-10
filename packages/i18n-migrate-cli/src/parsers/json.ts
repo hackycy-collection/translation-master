@@ -1,12 +1,27 @@
 import type { FileParser, TextSegment, TranslationEntry } from '../types'
-import { simpleParser } from './simple'
+import { extractQuotedStrings, finalizeSegments, replaceTranslations } from './range'
 
 export const jsonParser: FileParser = {
   supportedExtensions: ['.json'],
-  extract: (content: string, filePath: string): TextSegment[] => simpleParser.extract(content, filePath),
+  extract: (content: string, filePath: string): TextSegment[] => finalizeSegments(extractJsonSegments(content, filePath), filePath),
   replace: (
     content: string,
     segments: TextSegment[],
     translations: Map<string, TranslationEntry>,
-  ) => simpleParser.replace(content, segments, translations),
+  ) => replaceTranslations(content, segments, translations),
+}
+
+export function extractJsonSegments(content: string, filePath: string) {
+  try {
+    JSON.parse(content)
+  }
+  catch {
+    return []
+  }
+  return extractQuotedStrings(content, filePath, 'json-value', 'JSONString')
+    .filter(segment => !isLikelyJsonKey(content, segment.end))
+}
+
+function isLikelyJsonKey(content: string, end: number): boolean {
+  return /^\s*:/.test(content.slice(end, end + 12))
 }
