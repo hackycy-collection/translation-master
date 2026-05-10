@@ -103,6 +103,30 @@ describe('i18n migrate architecture primitives', () => {
     })
   })
 
+  it('enforces glossary terminology on machine translations', async () => {
+    const results = await translateTexts({
+      texts: ['Review orders, create shipments, and follow customer updates.'],
+      config: defineConfig({ sourceLocale: 'en', targetLocale: 'zh' }),
+      glossary: {
+        order: '订单',
+      },
+      translator: {
+        async translate(texts) {
+          return texts.map(text => ({
+            source: text,
+            translation: '审查命令,创建货运,并跟踪客户最新情况。',
+            translationSource: 'machine' as const,
+          }))
+        },
+      },
+    })
+
+    expect(results['Review orders, create shipments, and follow customer updates.']).toMatchObject({
+      translation: '审查订单,创建货运,并跟踪客户最新情况。',
+      translationSource: 'machine',
+    })
+  })
+
   it('applies default filter rules and force-pattern precedence', () => {
     expect(shouldTranslate({ text: '请输入用户名', context: 'template' }, DEFAULT_CONFIG.rules)).toBe(true)
     expect(shouldTranslate({ text: '中', context: 'template' }, DEFAULT_CONFIG.rules)).toBe(false)

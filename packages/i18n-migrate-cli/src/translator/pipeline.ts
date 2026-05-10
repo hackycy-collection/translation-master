@@ -1,6 +1,6 @@
 import type { Glossary } from '../glossary'
 import type { MigrateConfig, TranslateResult, Translator } from '../types'
-import { composeGlossaryTranslation, matchGlossary } from '../glossary'
+import { composeGlossaryTranslation, enforceGlossaryTerms, matchGlossary } from '../glossary'
 import { protectPlaceholders, restorePlaceholders } from '../utils/placeholder'
 
 export interface TranslatePipelineInput {
@@ -52,9 +52,10 @@ export async function translateTexts(input: TranslatePipelineInput): Promise<Rec
       const protectedText = protectedBatch[index]
       if (!source || !protectedText)
         return
+      const restoredTranslation = restorePlaceholders(result.translation, protectedText.placeholders)
       results[source] = {
         source,
-        translation: restorePlaceholders(result.translation, protectedText.placeholders),
+        translation: enforceGlossaryTerms(source, restoredTranslation, input.glossary, input.filePath),
         translationSource: 'machine',
         confidence: result.confidence,
       }

@@ -7,6 +7,9 @@ export type Glossary = Record<string, string>
 
 const INTERPOLATION_RE = /(\{\{[\s\S]*?\}\}|\$\{[\s\S]*?\})/
 const DROPPABLE_SOURCE_WORDS = new Set(['a', 'an', 'the', 'has', 'to', 'of'])
+const KNOWN_TERM_MISTRANSLATIONS: Record<string, string[]> = {
+  订单: ['命令', '顺序'],
+}
 
 export async function loadGlossary(cwd = process.cwd()): Promise<Glossary> {
   return readJsonFile<Glossary>(path.join(cwd, '.tmigrate', 'glossary.json'), {})
@@ -84,6 +87,25 @@ export function composeGlossaryTranslation(text: string, glossary: Glossary, fil
   return joinGlossaryChunks(chunks)
 }
 
+export function enforceGlossaryTerms(source: string, translation: string, glossary: Glossary, filePath?: string): string {
+  const terms = matchingGlossaryTerms(source, glossary, filePath)
+  if (!terms.length)
+    return translation
+
+  let next = translation
+  for (const term of terms) {
+    if (next.includes(term.translation))
+      continue
+
+    const mistranslation = KNOWN_TERM_MISTRANSLATIONS[term.translation]?.find(value => next.includes(value))
+    if (mistranslation) {
+      next = next.replaceAll(mistranslation, term.translation)
+    }
+  }
+
+  return next
+}
+
 function contextCandidates(filePath: string): string[] {
   const parts = toPosixPath(filePath).split('/').filter(Boolean)
   const basename = parts.at(-1)
@@ -107,6 +129,20 @@ function glossaryTerms(glossary: Glossary, filePath?: string): Array<{ source: s
     }))
     .filter(term => term.source && !term.source.endsWith('*'))
     .sort((a, b) => b.source.length - a.source.length)
+}
+
+function matchingGlossaryTerms(sourceText: string, glossary: Glossary, filePath?: string): Array<{ source: string, translation: string }> {
+  return glossaryTerms(glossary, filePath)
+    .filter(term => findMatchingTerm(sourceText, 0, [{ source: term.source, translation: term.translation }])
+      || sourceContainsTerm(sourceText, term.source))
+}
+
+function sourceContainsTerm(sourceText: string, source: string): boolean {
+  for (let index = 0; index < sourceText.length; index++) {
+    if (matchTermLength(sourceText, index, source))
+      return true
+  }
+  return false
 }
 
 function stripContextPrefix(source: string, contextPrefixes: Set<string>): string {
