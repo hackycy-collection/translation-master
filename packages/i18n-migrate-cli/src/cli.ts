@@ -1,4 +1,5 @@
 import type { ScanProgressEvent } from './types'
+import process from 'node:process'
 import { Command } from 'commander'
 import pc from 'picocolors'
 import { applyTranslations, restoreBackups } from './apply'
@@ -20,13 +21,18 @@ export function createCli(options: CreateCliOptions): Command {
 
   program
     .command('init')
-    .description('Create the .tmigrate directory structure and default configuration.')
-    .option('-i, --interactive', 'prompt for configuration values')
+    .description('Create the .tmigrate directory structure with an interactive setup flow.')
+    .option('-i, --interactive', 'force interactive setup prompts')
+    .option('-y, --yes', 'skip prompts and use defaults')
     .option('--from <locale>', 'source locale')
     .option('--to <locale>', 'target locale')
     .option('--no-overwrite', 'preserve existing files')
-    .action(async (command: { interactive?: boolean, from?: string, to?: string, overwrite?: boolean }) => {
-      const result = await initProject(command)
+    .action(async (command: { interactive?: boolean, yes?: boolean, from?: string, to?: string, overwrite?: boolean }) => {
+      const interactive = command.yes ? false : command.interactive ?? Boolean(process.stdin.isTTY)
+      const result = await initProject({
+        ...command,
+        interactive,
+      })
       console.log(pc.green(`Initialized .tmigrate (${result.created.length} created, ${result.skipped.length} skipped).`))
     })
 

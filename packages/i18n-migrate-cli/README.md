@@ -20,7 +20,7 @@ pnpm exec tmigrate --help
 
 ```bash
 # 1. 初始化 .tmigrate 配置目录
-pnpm exec tmigrate init --from zh --to en
+pnpm exec tmigrate init
 
 # 2. 扫描源码并生成 .tmigrate/maps 分片映射
 pnpm exec tmigrate scan src --to en
@@ -54,7 +54,7 @@ pnpm exec tmigrate restore
 
 ```bash
 tmigrate init
-tmigrate init --interactive
+tmigrate init --yes
 tmigrate init --from zh --to en
 tmigrate init --from en --to zh --no-overwrite
 ```
@@ -63,7 +63,8 @@ tmigrate init --from en --to zh --no-overwrite
 
 | 选项 | 说明 |
 |---|---|
-| `--interactive` | 通过终端问答生成配置 |
+| `--interactive` | 强制通过终端问答生成配置 |
+| `--yes` | 跳过提示，直接使用默认配置 |
 | `--from <locale>` | 源语言，如 `zh`、`en` |
 | `--to <locale>` | 目标语言，如 `en`、`zh` |
 | `--no-overwrite` | 只创建缺失文件，不覆盖已有配置 |

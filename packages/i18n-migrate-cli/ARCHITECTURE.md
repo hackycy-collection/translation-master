@@ -118,8 +118,11 @@ tmigrate init
 支持选项：
 
 ```bash
-# 交互式配置（问答引导选择 sourceLocale、targetLocale、include 等，基于 @clack/prompts）
-tmigrate init --interactive
+# 交互式配置（默认进入问答引导，基于 @clack/prompts）
+tmigrate init
+
+# 跳过问答，使用默认配置
+tmigrate init --yes
 
 # 指定源语言 / 目标语言
 tmigrate init --from zh --to en
@@ -648,7 +651,7 @@ interface TranslateResult {
 
 `@clack/prompts` 提供终端交互能力，用于以下场景：
 
-- `init --interactive`：`select` 选择源语言/目标语言，`multiselect` 选择文件类型，`text` 输入 source root
+- `init` 默认流程：`select` 选择源语言/目标语言，`multiselect` 选择文件类型，`text` 输入 source root
 - 覆盖确认：`.tmigrate` 已存在时通过 `confirm` 确认是否覆盖
 - 全局加载状态：`spinner` 已封装为公共 helper，可用于长任务进度展示
 
