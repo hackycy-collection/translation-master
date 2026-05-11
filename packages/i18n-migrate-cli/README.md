@@ -108,6 +108,33 @@ tmigrate apply
 | `--dry-run` | 只打印 diff，不写入文件 |
 | `--path <path>` | 只处理指定文件或目录 |
 
+#### 回写转义策略
+
+`apply` 回写的是源码片段，不是纯文本替换。CLI 会根据文本所在上下文对译文重新编码，避免译文里的特殊字符破坏目标文件语法。
+
+例如源代码中有：
+
+```ts
+const title = '账号安全'
+```
+
+如果映射文件里的译文是 `Account's secure.`，回写结果会是：
+
+```ts
+const title = 'Account\'s secure.'
+```
+
+当前会按上下文处理以下风险：
+
+| 上下文 | 处理方式 |
+|---|---|
+| TS/JS/Vue script 字符串 | 按外层 `'`、`"`、`` ` `` 转义引号、反斜杠、换行和模板字符串反引号 |
+| JSON string value | 使用 JSON 字符串编码，保护引号、反斜杠和控制字符 |
+| HTML/Vue template 文本 | 转义 `&`、`<`，避免译文被当作标签或实体 |
+| HTML 属性 | 在文本转义基础上按属性引号转义 `'` 或 `"` |
+| CSS/SCSS/Less `content` | 转义引号、反斜杠和换行 |
+| YAML value | 保留已有引号风格；无引号值会写成 JSON 风格双引号标量，避免 `:`、`#`、换行等破坏 YAML |
+
 ### `approve`
 
 批量把 `.tmigrate/maps/` 中可回写的译文标记为 `approved: true`，适合大型项目在人工抽检或统一信任机器翻译后批量放行。

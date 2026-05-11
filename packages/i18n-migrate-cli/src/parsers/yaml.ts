@@ -24,8 +24,12 @@ export function extractYamlSegments(content: string, filePath: string) {
       const colonIndex = segment.text.indexOf(':')
       if (colonIndex === -1)
         return segment
-      const text = segment.text.slice(colonIndex + 1).trim().replace(/^["']|["']$/g, '')
-      const start = segment.start + colonIndex + 1 + leadingSpaces(segment.text.slice(colonIndex + 1))
+      const rawValue = segment.text.slice(colonIndex + 1)
+      const trimmedValue = rawValue.trim()
+      const quote = trimmedValue[0]
+      const quoted = (quote === '\'' || quote === '"') && trimmedValue.endsWith(quote)
+      const text = quoted ? trimmedValue.slice(1, -1) : trimmedValue
+      const start = segment.start + colonIndex + 1 + leadingSpaces(rawValue) + (quoted ? 1 : 0)
       return {
         ...segment,
         text,

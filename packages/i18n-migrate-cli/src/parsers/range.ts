@@ -32,7 +32,7 @@ export function replaceTranslations(
       return {
         start: segment.start,
         end: segment.end,
-        text: quoteLike(content.slice(segment.start, segment.end), segment.text, entry.translation),
+        text: encodeReplacement(content, segment, entry.translation),
       }
     })
     .filter((item): item is { start: number, end: number, text: string } => Boolean(item))
@@ -124,12 +124,131 @@ export function dedupeSegments(segments: RangeSegment[], filePath: string): Rang
   })
 }
 
-function quoteLike(original: string, text: string, translation: string): string {
-  if (original === text)
-    return translation
-  return original.replace(text, translation)
-}
-
 function normalizeQuotedText(text: string): string {
   return text.replace(/\\n/g, '\n').replace(/\\'/g, '\'').replace(/\\"/g, '"').replace(/\\`/g, '`')
+}
+
+function encodeReplacement(content: string, segment: TextSegment, translation: string): string {
+  const quote = surroundingQuote(content, segment)
+  const placeholders = segment.interpolation?.segments ?? []
+
+  switch (segment.context) {
+    case 'script':
+      return quote === '`'
+        ? encodeWithProtectedPlaceholders(translation, placeholders, text => escapeScriptString(text, quote))
+        : quote
+          ? escapeScriptString(translation, quote)
+          : translation
+    case 'json-value':
+      return quote === '"' ? escapeJsonStringContent(translation) : JSON.stringify(translation)
+    case 'style':
+      return quote ? escapeCssString(translation, quote) : translation
+    case 'html-attr':
+      return encodeWithProtectedPlaceholders(translation, placeholders, text => escapeHtmlAttribute(text, quote))
+    case 'html-text':
+    case 'template':
+      return encodeWithProtectedPlaceholders(translation, placeholders, escapeHtmlText)
+    case 'yaml-value':
+      return quote ? escapeYamlQuotedString(translation, quote) : JSON.stringify(translation)
+    default:
+      return translation
+  }
+}
+
+function surroundingQuote(content: string, segment: TextSegment): string | undefined {
+  const before = content[segment.start - 1]
+  const after = content[segment.end]
+  if (before && before === after && isQuote(before))
+    return before
+  return undefined
+}
+
+function isQuote(value: string): boolean {
+  return value === '\'' || value === '"' || value === '`'
+}
+
+function encodeWithProtectedPlaceholders(
+  text: string,
+  placeholders: string[],
+  encode: (value: string) => string,
+): string {
+  if (!placeholders.length)
+    return encode(text)
+
+  const tokens = placeholders.map((_, index) => `\uE000TM${index}\uE001`)
+  let protectedText = text
+  placeholders.forEach((placeholder, index) => {
+    protectedText = protectedText.split(placeholder).join(tokens[index]!)
+  })
+
+  let encoded = encode(protectedText)
+  tokens.forEach((token, index) => {
+    encoded = encoded.split(token).join(placeholders[index]!)
+  })
+  return encoded
+}
+
+function escapeScriptString(text: string, quote: string): string {
+  const backspace = String.fromCharCode(8)
+  let escaped = text
+    .replace(/\\/g, '\\\\')
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029')
+
+  escaped = escaped.split(backspace).join('\\b')
+
+  if (quote === '`') {
+    escaped = escaped.replace(/`/g, '\\`').replace(/\$\{/g, '\\${')
+  }
+  else {
+    escaped = escaped
+      .replace(/\t/g, '\\t')
+      .replace(/\f/g, '\\f')
+      .replace(new RegExp(escapeRegExp(quote), 'g'), `\\${quote}`)
+  }
+
+  return escaped
+}
+
+function escapeJsonStringContent(text: string): string {
+  return JSON.stringify(text).slice(1, -1)
+}
+
+function escapeCssString(text: string, quote: string): string {
+  return text
+    .replace(/\\/g, '\\\\')
+    .replace(/\r\n|\r|\n/g, '\\A ')
+    .replace(new RegExp(escapeRegExp(quote), 'g'), `\\${quote}`)
+}
+
+function escapeHtmlText(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+}
+
+function escapeHtmlAttribute(text: string, quote?: string): string {
+  let escaped = escapeHtmlText(text).replace(/>/g, '&gt;')
+  if (quote === '\'')
+    escaped = escaped.replace(/'/g, '&#39;')
+  else
+    escaped = escaped.replace(/"/g, '&quot;')
+  return escaped
+}
+
+function escapeYamlQuotedString(text: string, quote: string): string {
+  if (quote === '\'') {
+    return text
+      .replace(/'/g, '\'\'')
+      .replace(/\r/g, '\\r')
+      .replace(/\n/g, '\\n')
+  }
+
+  return escapeJsonStringContent(text)
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }

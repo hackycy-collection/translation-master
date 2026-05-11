@@ -197,6 +197,17 @@ tmigrate apply --path src/modules/order
 tmigrate apply
 ```
 
+回写由 `Replacer` 根据 `TextSegment.start/end` 做倒序区间替换。区间只覆盖源文本内容本身，不覆盖外层语法分隔符；替换前会按上下文编码译文：
+
+- `script`：保留原有字符串分隔符，转义匹配的引号、反斜杠、换行和模板字符串反引号；模板字符串里的 `${...}` 占位符保持为表达式。
+- `json-value`：使用 JSON 字符串编码内容，避免生成非法 JSON。
+- `template` / `html-text`：转义 `&` 和 `<`，防止译文变成 HTML 标签或实体。
+- `html-attr`：按属性引号额外转义 `'` 或 `"`。
+- `style`：对 CSS `content` 字符串转义引号、反斜杠和换行。
+- `yaml-value`：保留已有单/双引号风格；无引号标量会写成双引号字符串，避免 `:`、`#`、换行等 YAML 语法字符改变结构。
+
+这个策略避免了 `const title = '账号安全'` 回写为 `const title = 'Account's secure.'` 这类编译错误，也覆盖了 HTML、JSON、CSS、YAML 中译文特殊字符造成的结构破坏。
+
 ### 回滚
 
 `apply` 执行时自动将原文件备份到 `.tmigrate/backups/`，保留目录结构。`restore` 命令从备份恢复，不依赖 source map 反向推导。
