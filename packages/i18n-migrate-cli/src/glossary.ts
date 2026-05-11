@@ -2,6 +2,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { loadConfig } from './config'
 import { readJsonFile, writeJsonFile } from './fs-utils'
+import { GLOSSARY_PRESETS } from './glossary-presets'
 import { toPosixPath } from './paths'
 
 export type Glossary = Record<string, string>
@@ -33,98 +34,6 @@ const INTERPOLATION_RE = /(\{\{[\s\S]*?\}\}|\$\{[\s\S]*?\})/
 const DROPPABLE_SOURCE_WORDS = new Set(['a', 'an', 'the', 'has', 'to', 'of'])
 const KNOWN_TERM_MISTRANSLATIONS: Record<string, string[]> = {
   订单: ['命令', '顺序'],
-}
-
-const GLOSSARY_PRESETS: Record<GlossaryPresetName, Glossary> = {
-  ui: {
-    确定: 'OK',
-    取消: 'Cancel',
-    提交: 'Submit',
-    保存: 'Save',
-    删除: 'Delete',
-    编辑: 'Edit',
-    新增: 'Add',
-    添加: 'Add',
-    创建: 'Create',
-    搜索: 'Search',
-    查询: 'Search',
-    重置: 'Reset',
-    返回: 'Back',
-    关闭: 'Close',
-    打开: 'Open',
-    启用: 'Enable',
-    禁用: 'Disable',
-    登录: 'Log in',
-    退出: 'Log out',
-    注册: 'Sign up',
-    用户名: 'Username',
-    密码: 'Password',
-    邮箱: 'Email',
-    手机号: 'Phone number',
-    验证码: 'Verification code',
-    首页: 'Home',
-    详情: 'Details',
-    列表: 'List',
-    设置: 'Settings',
-    状态: 'Status',
-    操作: 'Actions',
-    更多: 'More',
-    加载中: 'Loading',
-    暂无数据: 'No data',
-    成功: 'Success',
-    失败: 'Failed',
-    错误: 'Error',
-    警告: 'Warning',
-    提示: 'Tip',
-    确认: 'Confirm',
-    全选: 'Select all',
-    导入: 'Import',
-    导出: 'Export',
-    下载: 'Download',
-    上传: 'Upload',
-    预览: 'Preview',
-    复制: 'Copy',
-    刷新: 'Refresh',
-    上一页: 'Previous',
-    下一页: 'Next',
-  },
-  business: {
-    订单: 'Order',
-    用户: 'User',
-    角色: 'Role',
-    权限: 'Permission',
-    菜单: 'Menu',
-    商品: 'Product',
-    库存: 'Inventory',
-    价格: 'Price',
-    金额: 'Amount',
-    数量: 'Quantity',
-    支付: 'Payment',
-    退款: 'Refund',
-    地址: 'Address',
-    物流: 'Shipping',
-    客户: 'Customer',
-    供应商: 'Vendor',
-    部门: 'Department',
-    系统: 'System',
-    审核: 'Review',
-    审批: 'Approval',
-    待处理: 'Pending',
-    已完成: 'Completed',
-    已取消: 'Canceled',
-    已启用: 'Enabled',
-    已禁用: 'Disabled',
-    创建时间: 'Created at',
-    更新时间: 'Updated at',
-    开始时间: 'Start time',
-    结束时间: 'End time',
-  },
-  all: {},
-}
-
-GLOSSARY_PRESETS.all = {
-  ...GLOSSARY_PRESETS.ui,
-  ...GLOSSARY_PRESETS.business,
 }
 
 export async function loadGlossary(cwd = process.cwd()): Promise<Glossary> {
@@ -191,12 +100,12 @@ export function matchGlossary(text: string, glossary: Glossary, filePath?: strin
   const contexts = filePath ? contextCandidates(filePath) : []
 
   for (const context of contexts) {
-    const exact = glossary[`${context}/${text}`]
+    const exact = findGlossaryValue(glossary, `${context}/${text}`)
     if (exact)
       return exact
   }
 
-  const plain = glossary[text]
+  const plain = findGlossaryValue(glossary, text)
   if (plain)
     return plain
 
@@ -299,7 +208,7 @@ function glossaryTerms(glossary: Glossary, filePath?: string): Array<{ source: s
       source: stripContextPrefix(source, contextPrefixes),
       translation,
     }))
-    .filter(term => term.source && !term.source.endsWith('*'))
+    .filter(term => term.source && !term.source.endsWith('*') && isComposableGlossarySource(term.source))
     .sort((a, b) => b.source.length - a.source.length)
 }
 
@@ -323,6 +232,27 @@ function stripContextPrefix(source: string, contextPrefixes: Set<string>): strin
       return source.slice(prefix.length)
   }
   return source
+}
+
+function findGlossaryValue(glossary: Glossary, key: string): string | undefined {
+  const exact = glossary[key]
+  if (exact)
+    return exact
+
+  if (!/[a-z]/i.test(key))
+    return undefined
+
+  const normalizedKey = key.toLocaleLowerCase()
+  for (const [candidate, value] of Object.entries(glossary)) {
+    if (candidate.toLocaleLowerCase() === normalizedKey)
+      return value
+  }
+
+  return undefined
+}
+
+function isComposableGlossarySource(source: string): boolean {
+  return !(source.length === 1 && hasCjk(source))
 }
 
 function findMatchingTerm(
