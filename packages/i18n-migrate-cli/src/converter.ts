@@ -38,6 +38,11 @@ export async function convertMaps(options: ConvertOptions = {}): Promise<Convert
 
   const config = await loadConfig(cwd)
   const runtime = resolveConvertOptions(config.convert, config.sourceLocale, config.targetLocale, options)
+  const translationConfig: MigrateConfig = {
+    ...config,
+    sourceLocale: runtime.sourceLocale,
+    targetLocale: runtime.targetLocale,
+  }
   const mapPaths = await findMapPaths(cwd, options.path)
   const outputs = new Map<string, LocaleOutput>()
   const glossary = runtime.translateMissing ? await loadGlossary(cwd) : {}
@@ -62,7 +67,7 @@ export async function convertMaps(options: ConvertOptions = {}): Promise<Convert
       const mapFile = await readJsonFile<MapFile>(path.join(cwd, mapPath), createMapFile())
       const entries = activeEntries(mapFile)
       const translatedEntries = runtime.translateMissing
-        ? await fillMissingTranslations(entries, sourcePath, config, glossary, translator, options)
+        ? await fillMissingTranslations(entries, sourcePath, translationConfig, glossary, translator, options)
         : entries
 
       if (runtime.includeSourceLocale) {

@@ -30,6 +30,22 @@ class ZhEchoTranslator implements Translator {
   }
 }
 
+class LocaleAwareTranslator implements Translator {
+  seen: Array<{ sourceLocale: string, targetLocale: string }> = []
+
+  async translate(texts: string[], options: Parameters<Translator['translate']>[1]) {
+    this.seen.push({
+      sourceLocale: options.sourceLocale,
+      targetLocale: options.targetLocale,
+    })
+    return texts.map(text => ({
+      source: text,
+      translation: `${options.sourceLocale}->${options.targetLocale}:${text}`,
+      translationSource: 'machine' as const,
+    }))
+  }
+}
+
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map(async dir => import('node:fs/promises').then(fs => fs.rm(dir, { recursive: true, force: true }))))
 })
@@ -215,6 +231,73 @@ describe('i18n migrate workflow', () => {
     ])
     expect(await readFile(path.join(cwd, 'locales', 'langs', 'en', 'views', 'Profile.json'), 'utf8'))
       .toBe(`{\n  "保存设置": "EN:保存设置"\n}\n`)
+  })
+
+  it('uses convert locale overrides when translating missing entries', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'Reports.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, '<template><button>导出报表</button></template>\n', 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+
+    const mapPath = path.join(cwd, '.tmigrate', 'maps', 'src', 'views', 'Reports.vue.json')
+    const map = JSON.parse(await readFile(mapPath, 'utf8')) as {
+      entries: Record<string, { approved: boolean, translation: string }>
+    }
+    map.entries['导出报表']!.approved = true
+    map.entries['导出报表']!.translation = ''
+    await writeFile(mapPath, JSON.stringify(map, null, 2), 'utf8')
+
+    const translator = new LocaleAwareTranslator()
+    await convertMaps({
+      cwd,
+      includeSourceLocale: false,
+      translateMissing: true,
+      sourceLocale: 'zh-CN',
+      targetLocale: 'en-US',
+      translator,
+    })
+
+    expect(translator.seen).toEqual([{ sourceLocale: 'zh-CN', targetLocale: 'en-US' }])
+    expect(await readFile(path.join(cwd, 'locales', 'langs', 'en-US', 'views', 'Reports.json'), 'utf8'))
+      .toBe(`{\n  "导出报表": "zh-CN->en-US:导出报表"\n}\n`)
+  })
+
+  it('allows convert options to disable configured missing translation', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'Alerts.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, '<template><button>异常提醒</button></template>\n', 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    const configPath = path.join(cwd, '.tmigrate', 'config.json')
+    const config = JSON.parse(await readFile(configPath, 'utf8')) as { convert?: Record<string, unknown> }
+    config.convert = { ...config.convert, translateMissing: true }
+    await writeFile(configPath, JSON.stringify(config, null, 2), 'utf8')
+
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+
+    const mapPath = path.join(cwd, '.tmigrate', 'maps', 'src', 'views', 'Alerts.vue.json')
+    const map = JSON.parse(await readFile(mapPath, 'utf8')) as {
+      entries: Record<string, { approved: boolean, translation: string }>
+    }
+    map.entries['异常提醒']!.approved = true
+    map.entries['异常提醒']!.translation = ''
+    await writeFile(mapPath, JSON.stringify(map, null, 2), 'utf8')
+
+    const translator = new LocaleAwareTranslator()
+    await convertMaps({
+      cwd,
+      includeSourceLocale: false,
+      translateMissing: false,
+      translator,
+    })
+
+    expect(translator.seen).toEqual([])
+    expect(await readFile(path.join(cwd, 'locales', 'langs', 'en', 'views', 'Alerts.json'), 'utf8'))
+      .toBe(`{}\n`)
   })
 
   it('seeds glossary presets without clobbering existing manual terms by default', async () => {

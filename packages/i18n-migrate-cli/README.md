@@ -183,6 +183,7 @@ tmigrate convert src/components --format ts
 tmigrate convert src --output-dir packages/app/locales/langs --namespace admin
 tmigrate convert src --target-only
 tmigrate convert src --translate-missing
+tmigrate convert src --no-translate-missing
 tmigrate convert src --dry-run
 ```
 
@@ -214,6 +215,7 @@ export default {
 | `--to <locale>` | 目标语言包 locale 名，默认使用配置里的 `targetLocale` |
 | `--target-only` | 只生成目标语言包 |
 | `--translate-missing` | 对已批准但译文为空的条目复用 scan 的翻译配置补译 |
+| `--no-translate-missing` | 即使配置中开启了补译，本次转换也跳过空译文补译 |
 | `--dry-run` | 只预览将生成的文件，不写入 |
 
 默认只转换 `approved: true`、未标记 `skip`、未标记 `deprecated` 的条目。如果多个 map 最终落到同一个 locale 文件，后处理的条目会覆盖同名 key。

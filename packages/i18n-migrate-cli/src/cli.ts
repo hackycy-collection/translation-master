@@ -104,6 +104,7 @@ export function createCli(options: CreateCliOptions): Command {
     .option('--to <locale>', 'target locale for generated target package')
     .option('--target-only', 'only generate target locale package')
     .option('--translate-missing', 'translate approved entries with empty translations before converting')
+    .option('--no-translate-missing', 'do not translate approved entries with empty translations')
     .option('--dry-run', 'preview generated locale package files without writing')
     .action(async (targetPath: string | undefined, command: {
       outputDir?: string

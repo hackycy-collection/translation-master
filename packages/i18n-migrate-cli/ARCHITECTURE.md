@@ -253,6 +253,7 @@ tmigrate stats src/modules/order
 tmigrate convert src --format ts --namespace admin
 tmigrate convert src --output-dir locales/langs --target-only
 tmigrate convert src --translate-missing
+tmigrate convert src --no-translate-missing
 ```
 
 默认输出目录是 `locales/langs`，路径形态为：
