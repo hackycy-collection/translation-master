@@ -19,6 +19,7 @@ import {
   sourcePathToMapPath,
   translateTexts,
 } from '../index'
+import { getInitLocaleOptions } from '../prompts'
 import { LocalTranslator } from '../translator/local'
 
 function segment(text: string, filePath = 'src/views/login.vue'): TextSegment {
@@ -146,6 +147,17 @@ describe('i18n migrate architecture primitives', () => {
 
     expect(shouldTranslate({ text: 'Order Management', context: 'template', sourceLocale: 'en' }, config.rules)).toBe(true)
     expect(shouldTranslate({ text: '订单管理', context: 'template', sourceLocale: 'en' }, config.rules)).toBe(false)
+  })
+
+  it('prefers popular languages in init locale options', () => {
+    const options = getInitLocaleOptions()
+    const codes = options.map(option => option.value)
+
+    expect(codes.slice(0, 6)).toEqual(['zh', 'zh-TW', 'en', 'ja', 'ko', 'es'])
+    expect(codes).toContain('ru')
+    expect(codes).toContain('ar')
+    expect(codes).toContain('fr')
+    expect(codes).toContain('de')
   })
 
   it('keeps Vue interpolation expressions in mixed template text segments', () => {
