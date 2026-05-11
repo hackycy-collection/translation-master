@@ -1,9 +1,11 @@
 import type { ScanProgressEvent, WorkflowProgressEvent } from './types'
+import path from 'node:path'
 import process from 'node:process'
 import { Command } from 'commander'
 import pc from 'picocolors'
 import { applyTranslations, restoreBackups } from './apply'
 import { approveTranslations } from './approve'
+import { initGlossary } from './glossary'
 import { initProject } from './init'
 import { createSpinner } from './prompts'
 import { scanProject } from './scanner'
@@ -95,6 +97,39 @@ export function createCli(options: CreateCliOptions): Command {
     .action(async (targetPath: string | undefined) => {
       const report = await collectMapStats({ path: targetPath })
       console.log(formatMapStatsReport(report))
+    })
+
+  const glossary = program
+    .command('glossary')
+    .description('Manage .tmigrate/glossary.json.')
+
+  glossary
+    .command('init')
+    .description('Seed .tmigrate/glossary.json with built-in terminology presets.')
+    .option('--preset <name>', 'preset glossary: ui, business, all', 'ui')
+    .option('--from <locale>', 'source locale')
+    .option('--to <locale>', 'target locale')
+    .option('--overwrite', 'overwrite conflicting existing glossary entries')
+    .option('--dry-run', 'preview changes without writing glossary.json')
+    .action(async (command: {
+      preset?: string
+      from?: string
+      to?: string
+      overwrite?: boolean
+      dryRun?: boolean
+    }) => {
+      const result = await initGlossary({
+        preset: command.preset,
+        from: command.from,
+        to: command.to,
+        overwrite: command.overwrite,
+        dryRun: command.dryRun,
+      })
+      const verb = result.dryRun ? 'Would seed' : 'Seeded'
+      console.log(pc.green(`${verb} ${pathRelativeToCwd(result.glossaryPath)} using ${result.preset} (${result.sourceLocale}->${result.targetLocale}).`))
+      console.log(pc.dim(`Added ${result.added}, updated ${result.updated}, unchanged ${result.unchanged}, skipped ${result.skipped}.`))
+      if (result.skipped > 0 && !command.overwrite)
+        console.log(pc.dim('Use --overwrite to replace conflicting existing entries.'))
     })
 
   program
@@ -302,4 +337,8 @@ function formatModelLoadMessage(
   const filePrefix = filePath ? `Processing ${filePath}` : 'Loading local model'
   const fileProgress = currentFileTotal > 0 ? ` (${currentFileIndex}/${currentFileTotal})` : ''
   return `${filePrefix}${fileProgress} · loading local model`
+}
+
+function pathRelativeToCwd(filePath: string): string {
+  return path.relative(process.cwd(), filePath) || filePath
 }

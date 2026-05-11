@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { applyTranslations, approveTranslations, initProject, restoreBackups, scanProject } from '../index'
+import { applyTranslations, approveTranslations, initGlossary, initProject, restoreBackups, scanProject } from '../index'
 import { collectMapStats, formatMapStatsReport } from '../stats'
 
 const tempDirs: string[] = []
@@ -151,6 +151,42 @@ describe('i18n migrate workflow', () => {
     expect(overriddenAppMap.entries['跳过此项']?.approved).toBe(true)
     expect(overriddenAppMap.entries['空译文']?.approved).toBe(true)
     expect(overriddenAppMap.entries['旧文案']?.approved).toBe(true)
+  })
+
+  it('seeds glossary presets without clobbering existing manual terms by default', async () => {
+    const cwd = await createTempProject()
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    const glossaryPath = path.join(cwd, '.tmigrate', 'glossary.json')
+    await writeFile(glossaryPath, JSON.stringify({ 提交: 'Send', 自定义: 'Custom' }, null, 2), 'utf8')
+
+    const preview = await initGlossary({ cwd, preset: 'business', dryRun: true })
+    expect(preview.entries.订单).toBe('Order')
+    expect(JSON.parse(await readFile(glossaryPath, 'utf8')).订单).toBeUndefined()
+
+    const seeded = await initGlossary({ cwd, preset: 'all' })
+    expect(seeded.added).toBeGreaterThan(0)
+    expect(seeded.skipped).toBe(1)
+    expect(seeded.entries.提交).toBe('Send')
+    expect(seeded.entries.自定义).toBe('Custom')
+
+    const saved = JSON.parse(await readFile(glossaryPath, 'utf8')) as Record<string, string>
+    expect(saved.订单).toBe('Order')
+    expect(saved.提交).toBe('Send')
+
+    const overwritten = await initGlossary({ cwd, preset: 'ui', overwrite: true })
+    expect(overwritten.updated).toBe(1)
+    expect(overwritten.entries.提交).toBe('Submit')
+  })
+
+  it('supports English to Chinese glossary presets from project config', async () => {
+    const cwd = await createTempProject()
+    await initProject({ cwd, overwrite: false, from: 'en', to: 'zh' })
+
+    const seeded = await initGlossary({ cwd, preset: 'ui' })
+    expect(seeded.sourceLocale).toBe('en')
+    expect(seeded.targetLocale).toBe('zh')
+    expect(seeded.entries.Submit).toBe('提交')
+    expect(seeded.entries.Search).toBe('搜索')
   })
 
   it('summarizes map progress and flags orphaned files', async () => {

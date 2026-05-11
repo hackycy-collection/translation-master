@@ -22,6 +22,9 @@ pnpm exec tmigrate --help
 # 1. 初始化 .tmigrate 配置目录
 pnpm exec tmigrate init
 
+# 1.5. 可选：初始化内置高频词库，减少机器翻译误译
+pnpm exec tmigrate glossary init --preset all
+
 # 2. 扫描源码并生成 .tmigrate/maps 分片映射
 pnpm exec tmigrate scan src --to en
 
@@ -92,6 +95,28 @@ tmigrate scan src --incremental --clean-deprecated
 | `--to <locale>` | 覆盖配置里的目标语言 |
 | `--incremental` | 只扫描 hash 发生变化的文件 |
 | `--clean-deprecated` | 清理已废弃条目 |
+
+### `glossary init`
+
+把内置高频词库合并到 `.tmigrate/glossary.json`。默认使用项目配置里的 `sourceLocale` / `targetLocale`，目前内置支持 `zh -> en` 和 `en -> zh`。
+
+```bash
+tmigrate glossary init
+tmigrate glossary init --preset business
+tmigrate glossary init --preset all --dry-run
+tmigrate glossary init --from en --to zh --preset ui
+tmigrate glossary init --preset all --overwrite
+```
+
+常用选项：
+
+| 选项 | 说明 |
+|---|---|
+| `--preset <name>` | 内置词库：`ui`、`business`、`all`，默认 `ui` |
+| `--from <locale>` | 覆盖源语言，如 `zh`、`en` |
+| `--to <locale>` | 覆盖目标语言，如 `en`、`zh` |
+| `--dry-run` | 只预览新增/更新/跳过数量，不写入文件 |
+| `--overwrite` | 覆盖已有冲突词条；默认保留现有人工词条 |
 
 ### `apply`
 
@@ -372,11 +397,13 @@ API 请求体格式：
 ```ts
 import {
   applyTranslations,
+  initGlossary,
   initProject,
   scanProject,
 } from '@translation-master/i18n-migrate-cli'
 
 await initProject({ cwd: process.cwd(), from: 'zh', to: 'en', overwrite: false })
+await initGlossary({ cwd: process.cwd(), preset: 'all' })
 
 await scanProject({
   cwd: process.cwd(),
@@ -391,6 +418,7 @@ await applyTranslations({ cwd: process.cwd(), dryRun: true })
 | 导出 | 说明 |
 |---|---|
 | `initProject()` | 初始化 `.tmigrate` |
+| `initGlossary()` | 合并内置词库到 `.tmigrate/glossary.json` |
 | `scanProject()` | 扫描源码并生成 map |
 | `applyTranslations()` | 回写已确认译文 |
 | `restoreBackups()` | 从备份恢复 |
