@@ -8,6 +8,7 @@ export class LocalTranslator implements Translator {
   constructor(options: { modelBaseUrl?: string, onModelLoadProgress?: (event: ModelLoadProgress) => void } = {}) {
     this.translator = new NodeTranslator({
       autoDetect: false,
+      dtype: 'q8',
       modelBaseUrl: options.modelBaseUrl,
     })
     if (options.onModelLoadProgress)

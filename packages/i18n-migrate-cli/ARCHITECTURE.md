@@ -161,7 +161,7 @@ tmigrate scan ./src --incremental --clean-deprecated
 Preparing translation workspace
 Scanning source files (12 found)
 Processing src/views/Login.vue (1/12)
-Processing src/views/Login.vue (1/12) · loading local model (Xenova/opus-mt-zh-en)
+Processing src/views/Login.vue (1/12) · loading local model
 Processing src/views/Login.vue · translating 20/46 texts (batch 1/3)
 Processing src/views/Login.vue · saving map
 Scan finished.
@@ -175,10 +175,12 @@ Scanned 12 file(s), skipped 0, extracted 184 text(s).
 | `Preparing translation workspace` | `config.ts` / `glossary.ts` | 读取配置、术语表，并合并命令行参数 |
 | `Scanning source files ...` | `scanner.ts` | 根据 include/exclude 和目标路径查找待扫描文件 |
 | `Processing ...` | `Extractor` / `Parser` | 解析当前文件并提取源语言文本 |
-| `Processing ... loading local model ...` | `LocalTranslator` / `@translation-master/node` | 本地 ONNX 模型加载或下载中，仍保持在当前文件上下文里 |
+| `Processing ... loading local model` | `LocalTranslator` / `@translation-master/node` | 本地 ONNX 模型加载或下载中，保持为单一稳定阶段 |
 | `Processing ... translating ...` | `translator/pipeline.ts` | 展示机器翻译文本数和批次进度；术语表命中的文本不会进入机器翻译 |
 | `Processing ... saving map` | `mapping.ts` | 合并旧映射、保留人工修改，并写入 `.tmigrate/maps/` |
 | `Scan finished.` | `cli.ts` | 扫描结束，随后打印汇总统计 |
+
+Node 端本地翻译会通过 `@translation-master/node` 收敛 Hugging Face 的底层 warning，并保持终端提示为单一稳定阶段，避免这类日志和 spinner 互相干扰。
 
 当配置为 `translator: "api"` 且提供 `translatorOptions.endpoint` 时，终端仍会展示扫描、翻译批次和写入进度，但不会出现模型加载提示。
 

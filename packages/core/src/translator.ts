@@ -240,7 +240,9 @@ export class Translator {
       resolved.modelId,
       'translation',
       options,
-      (modelId, _task, opts) => tf.pipeline('translation', modelId, opts) as unknown as Promise<PipelineInstance>,
+      (modelId, _task, opts) => withSuppressedLoadWarnings(
+        () => tf.pipeline('translation', modelId, opts) as unknown as Promise<PipelineInstance>,
+      ),
       progressCallback,
     )
 
@@ -343,5 +345,28 @@ export class Translator {
     if (requested !== 'auto')
       return requested
     return 'wasm'
+  }
+}
+
+const BENIGN_LOAD_WARNING_PATTERNS = [
+  /dtype not specified for "encoder_model"/i,
+  /dtype not specified for "decoder_model_merged"/i,
+  /MarianTokenizer" is not yet supported by Hugging Face's "fast" tokenizers library/i,
+]
+
+async function withSuppressedLoadWarnings<T>(task: () => Promise<T>): Promise<T> {
+  const originalWarn = console.warn
+  console.warn = (...args: unknown[]) => {
+    const message = args.map(value => String(value)).join(' ')
+    if (BENIGN_LOAD_WARNING_PATTERNS.some(pattern => pattern.test(message)))
+      return
+    originalWarn(...args as Parameters<typeof console.warn>)
+  }
+
+  try {
+    return await task()
+  }
+  finally {
+    console.warn = originalWarn
   }
 }

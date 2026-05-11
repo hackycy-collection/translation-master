@@ -186,7 +186,7 @@ function createScanProgressRenderer(): { update: (event: ScanProgressEvent) => v
       if (event.phase === 'model-load') {
         if (event.state === 'ready' || event.state === 'done')
           return
-        startOrUpdate(formatModelLoadMessage(event, currentFilePath, currentFileIndex, currentFileTotal))
+        startOrUpdate(formatModelLoadMessage(currentFilePath, currentFileIndex, currentFileTotal))
         return
       }
       if (event.phase === 'translate') {
@@ -216,12 +216,11 @@ function createScanProgressRenderer(): { update: (event: ScanProgressEvent) => v
 }
 
 function formatModelLoadMessage(
-  event: Extract<ScanProgressEvent, { phase: 'model-load' }>,
   filePath: string | undefined,
   currentFileIndex: number,
   currentFileTotal: number,
 ): string {
   const filePrefix = filePath ? `Processing ${filePath}` : 'Loading local model'
   const fileProgress = currentFileTotal > 0 ? ` (${currentFileIndex}/${currentFileTotal})` : ''
-  return `${filePrefix}${fileProgress} · loading local model (${event.modelId})`
+  return `${filePrefix}${fileProgress} · loading local model`
 }
