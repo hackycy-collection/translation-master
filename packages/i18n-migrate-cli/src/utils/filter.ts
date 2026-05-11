@@ -24,13 +24,20 @@ export function shouldTranslate(input: FilterInput, rules: FilterRule[]): boolea
       return false
     if (rule.type === 'skip-pattern' && shouldApplySkipPattern(rule.value, sourceLocale) && new RegExp(rule.value).test(visibleText))
       return false
-    if (rule.type === 'min-length' && localeTextLength(visibleText, sourceLocale) < rule.value)
+    if (rule.type === 'min-length' && localeTextLength(visibleText, sourceLocale) < rule.value && !isSingleLocaleText(visibleText, sourceLocale))
       return false
     if (rule.type === 'max-length' && localeTextLength(visibleText, sourceLocale) > rule.value)
       return false
   }
 
   return true
+}
+
+function isSingleLocaleText(text: string, sourceLocale: string): boolean {
+  const trimmed = text.trim()
+  return Array.from(trimmed).length === 1
+    && localeTextLength(trimmed, sourceLocale) === 1
+    && hasLocaleText(trimmed, sourceLocale)
 }
 
 function stripInterpolation(text: string): string {

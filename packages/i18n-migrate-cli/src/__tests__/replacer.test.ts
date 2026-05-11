@@ -155,6 +155,26 @@ describe('replacer syntax-aware writeback', () => {
     ])).toContain('{ title: "Scenic Area", dataIndex: "scenicName" }')
   })
 
+  it('extracts single-character units in data objects without field-name special cases', () => {
+    const content = [
+      'export const statList = [',
+      '  { title: "销售额", prefix: "元", subPrefix: "单" },',
+      '  { title: "销售数量", prefix: "张", unit: "人" },',
+      ']',
+      'export const showTotal = (total) => "共" + total + "条"',
+    ].join('\n')
+    const extractor = new Extractor(config)
+    const segments = extractor.extract(content, 'src/data.ts')
+
+    expect(segments.map(segment => segment.text)).toEqual(['销售额', '元', '单', '销售数量', '张', '人', '共', '条'])
+    expect(replace(content, 'src/data.ts', [
+      ['元', 'yuan'],
+      ['单', 'order'],
+      ['张', 'ticket'],
+      ['人', 'people'],
+    ])).toContain('{ title: "销售额", prefix: "yuan", subPrefix: "order" }')
+  })
+
   it('keeps HTML text ranges after attributes containing greater-than signs', () => {
     const content = '<div><template data-test="fileMax > 1">最大上传{{ fileMax }}张图片</template></div>'
     const extractor = new Extractor(config)

@@ -28,6 +28,19 @@ export const uploadTips = {
   placeholder: '请使用扫码枪扫描客户微信/支付宝付款码',
 }
 
+export const statUnits = [
+  {
+    title: '销售额',
+    prefix: '元',
+    subPrefix: '单',
+  },
+  {
+    title: '销售数量',
+    prefix: '张',
+    unit: '人',
+  },
+]
+
 export function getPaymentTitle(record: PaymentRecord): string {
   return `订单支付 ${record.amount ? ` - ¥${record.amount}` : ''}`
 }

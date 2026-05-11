@@ -130,7 +130,7 @@ describe('i18n migrate architecture primitives', () => {
 
   it('applies default filter rules and force-pattern precedence', () => {
     expect(shouldTranslate({ text: '请输入用户名', context: 'template' }, DEFAULT_CONFIG.rules)).toBe(true)
-    expect(shouldTranslate({ text: '中', context: 'template' }, DEFAULT_CONFIG.rules)).toBe(false)
+    expect(shouldTranslate({ text: '中', context: 'template' }, DEFAULT_CONFIG.rules)).toBe(true)
     expect(shouldTranslate({ text: '请求失败', context: 'console' }, DEFAULT_CONFIG.rules)).toBe(false)
 
     const rules = defineConfig({
