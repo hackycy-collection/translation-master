@@ -2,8 +2,9 @@
 import process from 'node:process'
 import { version } from '../package.json'
 import { createCli } from '../src/cli'
+import { formatErrorWithCauses } from '../src/error-utils'
 
 createCli({ version }).parseAsync().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error)
+  console.error(formatErrorWithCauses(error))
   process.exitCode = 1
 })

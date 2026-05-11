@@ -1,4 +1,5 @@
 import type { TranslateOptions, TranslateResult, Translator } from '../types'
+import { toError } from '../error-utils'
 
 export class ApiTranslator implements Translator {
   constructor(private readonly options: { apiKey?: string, endpoint?: string, timeout?: number } = {}) {}
@@ -13,25 +14,55 @@ export class ApiTranslator implements Translator {
       }))
     }
 
-    const response = await fetch(this.options.endpoint, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        ...(this.options.apiKey ? { authorization: `Bearer ${this.options.apiKey}` } : {}),
-      },
-      body: JSON.stringify({
-        texts,
-        sourceLocale: options.sourceLocale,
-        targetLocale: options.targetLocale,
-        glossary: options.glossary,
-      }),
-      signal: AbortSignal.timeout(this.options.timeout ?? 30000),
-    })
+    const endpoint = this.options.endpoint
+    const timeout = this.options.timeout ?? 30000
 
-    if (!response.ok)
-      throw new Error(`API translator request failed: ${response.status} ${response.statusText}`)
+    let response: Response
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(this.options.apiKey ? { authorization: `Bearer ${this.options.apiKey}` } : {}),
+        },
+        body: JSON.stringify({
+          texts,
+          sourceLocale: options.sourceLocale,
+          targetLocale: options.targetLocale,
+          glossary: options.glossary,
+        }),
+        signal: AbortSignal.timeout(timeout),
+      })
+    }
+    catch (error) {
+      throw new Error(`API translator request failed for ${endpoint} (${texts.length} text(s), timeout ${timeout}ms)`, {
+        cause: toError(error),
+      })
+    }
 
-    return normalizeApiResponse(await response.json(), texts)
+    if (!response.ok) {
+      const body = await safeReadResponseBody(response)
+      throw new Error(`API translator request failed: ${response.status} ${response.statusText} (${endpoint})${body ? `\nResponse: ${body}` : ''}`)
+    }
+
+    try {
+      return normalizeApiResponse(await response.json(), texts)
+    }
+    catch (error) {
+      throw new Error(`API translator returned an invalid response from ${endpoint}`, {
+        cause: toError(error),
+      })
+    }
+  }
+}
+
+async function safeReadResponseBody(response: Response): Promise<string> {
+  try {
+    const body = (await response.text()).trim().replace(/\s+/g, ' ')
+    return body.length > 200 ? `${body.slice(0, 200)}...` : body
+  }
+  catch {
+    return ''
   }
 }
 

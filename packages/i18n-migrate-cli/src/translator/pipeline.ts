@@ -1,5 +1,6 @@
 import type { Glossary } from '../glossary'
 import type { MigrateConfig, TranslateResult, Translator } from '../types'
+import { toError } from '../error-utils'
 import { composeGlossaryTranslation, enforceGlossaryTerms, matchGlossary } from '../glossary'
 import { protectPlaceholders, restorePlaceholders } from '../utils/placeholder'
 
@@ -52,17 +53,27 @@ export async function translateTexts(input: TranslatePipelineInput): Promise<Rec
 
   await runConcurrent(batches, input.config.translatorOptions.concurrency, async (batch) => {
     const protectedBatch = batch.map(text => protectPlaceholders(text))
-    const translated = await retry(
-      () => input.translator.translate(
-        protectedBatch.map(item => item.text),
-        {
-          sourceLocale: input.config.sourceLocale,
-          targetLocale: input.config.targetLocale,
-          glossary: input.glossary,
-        },
-      ),
-      input.config.translatorOptions.retries,
-    )
+    let translated
+    try {
+      translated = await retry(
+        () => input.translator.translate(
+          protectedBatch.map(item => item.text),
+          {
+            sourceLocale: input.config.sourceLocale,
+            targetLocale: input.config.targetLocale,
+            glossary: input.glossary,
+          },
+        ),
+        input.config.translatorOptions.retries,
+      )
+    }
+    catch (error) {
+      const sample = summarizeBatch(batch)
+      const location = input.filePath ? ` in ${input.filePath}` : ''
+      throw new Error(`Translation failed${location} (${batch.length} text(s), sample: ${sample})`, {
+        cause: toError(error),
+      })
+    }
 
     translated.forEach((result, index) => {
       const source = batch[index]
@@ -117,4 +128,11 @@ async function retry<T>(task: () => Promise<T>, retries: number): Promise<T> {
     }
   }
   throw lastError
+}
+
+function summarizeBatch(batch: string[]): string {
+  const sample = (batch[0] ?? '').replace(/\s+/g, ' ').trim()
+  if (sample.length <= 40)
+    return JSON.stringify(sample)
+  return JSON.stringify(`${sample.slice(0, 40)}...`)
 }
