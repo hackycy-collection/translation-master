@@ -1,8 +1,9 @@
+import type { MigrateConfigInput } from './config'
+import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
-import { loadConfig } from './config'
+import { githubTreeToRawBaseUrl, loadConfig } from './config'
 import { readJsonFile, writeJsonFile } from './fs-utils'
-import { GLOSSARY_PRESETS } from './glossary-presets'
 import { toPosixPath } from './paths'
 
 export type Glossary = Record<string, string>
@@ -13,6 +14,7 @@ export interface InitGlossaryOptions {
   from?: string
   to?: string
   preset?: GlossaryPresetName | string
+  presetIndex?: string
   overwrite?: boolean
   dryRun?: boolean
 }
@@ -35,6 +37,15 @@ const DROPPABLE_SOURCE_WORDS = new Set(['a', 'an', 'the', 'has', 'to', 'of'])
 const KNOWN_TERM_MISTRANSLATIONS: Record<string, string[]> = {
   订单: ['命令', '顺序'],
 }
+const RESOURCE_TEXT_CACHE = new Map<string, Promise<string>>()
+
+interface GlossaryPresetIndex {
+  version?: number
+  base?: string
+  presets: Record<string, Partial<Record<`${string}->${string}`, string[]>>>
+}
+
+type GlossaryLocalePair = `${string}->${string}`
 
 export async function loadGlossary(cwd = process.cwd()): Promise<Glossary> {
   return readJsonFile<Glossary>(path.join(cwd, '.tmigrate', 'glossary.json'), {})
@@ -42,9 +53,10 @@ export async function loadGlossary(cwd = process.cwd()): Promise<Glossary> {
 
 export async function initGlossary(options: InitGlossaryOptions = {}): Promise<InitGlossaryResult> {
   const cwd = options.cwd ?? process.cwd()
-  const overrides = {
+  const overrides: MigrateConfigInput = {
     ...(options.from ? { sourceLocale: options.from } : {}),
     ...(options.to ? { targetLocale: options.to } : {}),
+    ...(options.presetIndex ? { glossaryPresets: { index: options.presetIndex } } : {}),
   }
   const config = await loadConfig(cwd, overrides)
   const sourceLocale = normalizeLocale(config.sourceLocale)
@@ -52,7 +64,13 @@ export async function initGlossary(options: InitGlossaryOptions = {}): Promise<I
   const presetName = normalizePresetName(options.preset ?? 'ui')
   const glossaryPath = path.join(cwd, '.tmigrate', 'glossary.json')
   const existing = await loadGlossary(cwd)
-  const seed = glossaryPresetForLocalePair(presetName, sourceLocale, targetLocale)
+  const seed = await glossaryPresetForLocalePair(
+    presetName,
+    sourceLocale,
+    targetLocale,
+    cwd,
+    config.glossaryPresets?.index,
+  )
   const entries: Glossary = { ...existing }
   let added = 0
   let updated = 0
@@ -336,17 +354,130 @@ function normalizePresetName(preset: string): GlossaryPresetName {
   throw new Error(`Unsupported glossary preset "${preset}". Available presets: ui, business, all.`)
 }
 
-function glossaryPresetForLocalePair(preset: GlossaryPresetName, from: string, to: string): Glossary {
-  const zhToEn = GLOSSARY_PRESETS[preset]
-  if (from === 'zh' && to === 'en')
-    return zhToEn
-  if (from === 'en' && to === 'zh')
-    return invertGlossary(zhToEn)
-  throw new Error(`No built-in glossary preset for ${from}->${to}. Supported pairs: zh->en, en->zh.`)
+async function glossaryPresetForLocalePair(
+  preset: GlossaryPresetName,
+  from: string,
+  to: string,
+  cwd: string,
+  presetIndex = '',
+): Promise<Glossary> {
+  const indexLocation = resolvePresetIndexLocation(presetIndex, cwd)
+  const index = await loadJsonResource<GlossaryPresetIndex>(indexLocation)
+  const presetDefinition = index.presets[preset]
+
+  if (!presetDefinition) {
+    throw new Error(`Glossary preset "${preset}" was not found in ${presetIndex}.`)
+  }
+
+  const directPair = `${from}->${to}` as GlossaryLocalePair
+  const inversePair = `${to}->${from}` as GlossaryLocalePair
+  const baseLocation = resolvePresetBaseLocation(indexLocation, index.base)
+
+  if (presetDefinition[directPair])
+    return loadGlossaryFragments(presetDefinition[directPair], baseLocation)
+
+  if (presetDefinition[inversePair])
+    return invertGlossary(await loadGlossaryFragments(presetDefinition[inversePair], baseLocation))
+
+  throw new Error(`No glossary preset for ${from}->${to} in ${presetIndex}. Supported pairs: ${Object.keys(presetDefinition).join(', ') || 'none'}.`)
 }
 
 function normalizeLocale(locale: string): string {
   return locale.toLocaleLowerCase().split(/[-_]/)[0] ?? locale
+}
+
+function resolvePresetIndexLocation(presetIndex: string, cwd: string): string {
+  if (isRemoteResource(presetIndex))
+    return normalizeRemoteIndexLocation(presetIndex)
+  return path.isAbsolute(presetIndex) ? presetIndex : path.resolve(cwd, presetIndex)
+}
+
+function normalizeRemoteIndexLocation(resource: string): string {
+  if (resource.endsWith('.json'))
+    return resource
+
+  const rawBase = githubTreeToRawBaseUrl(resource)
+  if (rawBase)
+    return new URL('src/glossary-presets/index.json', rawBase).toString()
+
+  return new URL('index.json', ensureTrailingSlash(resource)).toString()
+}
+
+function resolvePresetBaseLocation(indexLocation: string, base: string | undefined): string {
+  if (!base)
+    return parentResourceLocation(indexLocation)
+  if (isRemoteResource(base))
+    return ensureTrailingSlash(base)
+  if (isRemoteResource(indexLocation))
+    return new URL(base, indexLocation).toString()
+  return path.isAbsolute(base) ? base : path.resolve(path.dirname(indexLocation), base)
+}
+
+function parentResourceLocation(resource: string): string {
+  if (isRemoteResource(resource))
+    return new URL('./', resource).toString()
+  return path.dirname(resource)
+}
+
+function resolveFragmentLocation(baseLocation: string, fragment: string): string {
+  if (isRemoteResource(fragment))
+    return fragment
+  if (isRemoteResource(baseLocation))
+    return new URL(fragment, ensureTrailingSlash(baseLocation)).toString()
+  return path.isAbsolute(fragment) ? fragment : path.resolve(baseLocation, fragment)
+}
+
+async function loadGlossaryFragments(fragments: string[], baseLocation: string): Promise<Glossary> {
+  const glossary: Glossary = {}
+  for (const fragment of fragments) {
+    Object.assign(glossary, await loadJsonResource<Glossary>(resolveFragmentLocation(baseLocation, fragment)))
+  }
+  return glossary
+}
+
+async function loadJsonResource<T>(resource: string): Promise<T> {
+  const raw = await readTextResource(resource)
+  try {
+    return JSON.parse(raw) as T
+  }
+  catch (error) {
+    const details = error instanceof Error ? error.message : String(error)
+    throw new Error(`Failed to parse JSON from ${resource}: ${details}`)
+  }
+}
+
+async function readTextResource(resource: string): Promise<string> {
+  const cached = RESOURCE_TEXT_CACHE.get(resource)
+  if (cached)
+    return cached
+
+  const pending = isRemoteResource(resource)
+    ? fetchRemoteResource(resource)
+    : readFile(resource, 'utf8')
+
+  RESOURCE_TEXT_CACHE.set(resource, pending)
+  try {
+    return await pending
+  }
+  catch (error) {
+    RESOURCE_TEXT_CACHE.delete(resource)
+    throw error
+  }
+}
+
+async function fetchRemoteResource(resource: string): Promise<string> {
+  const response = await fetch(resource)
+  if (!response.ok)
+    throw new Error(`Failed to fetch ${resource}: ${response.status} ${response.statusText}`)
+  return response.text()
+}
+
+function isRemoteResource(resource: string): boolean {
+  return /^https?:\/\//i.test(resource)
+}
+
+function ensureTrailingSlash(resource: string): string {
+  return resource.endsWith('/') ? resource : `${resource}/`
 }
 
 function invertGlossary(glossary: Glossary): Glossary {

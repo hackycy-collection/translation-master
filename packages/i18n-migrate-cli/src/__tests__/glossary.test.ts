@@ -1,10 +1,12 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { composeGlossaryTranslation, initGlossary, initProject, loadGlossary, matchGlossary } from '../index'
 
 const tempDirs: string[] = []
+const LOCAL_GLOSSARY_PRESET_INDEX = fileURLToPath(new URL('../glossary-presets/index.json', import.meta.url))
 
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map(dir => rm(dir, { recursive: true, force: true })))
@@ -15,7 +17,7 @@ describe('glossary presets', () => {
     const cwd = await createTempProject()
     await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
 
-    const seeded = await initGlossary({ cwd, preset: 'all' })
+    const seeded = await initGlossary({ cwd, preset: 'all', presetIndex: LOCAL_GLOSSARY_PRESET_INDEX })
 
     expect(seeded.entries.标题).toBe('Title')
     expect(seeded.entries.订单号).toBe('Order number')
@@ -32,7 +34,7 @@ describe('glossary presets', () => {
   it('matches lowercase English business terms for en to zh projects', async () => {
     const cwd = await createTempProject()
     await initProject({ cwd, overwrite: false, from: 'en', to: 'zh' })
-    await initGlossary({ cwd, preset: 'business' })
+    await initGlossary({ cwd, preset: 'business', presetIndex: LOCAL_GLOSSARY_PRESET_INDEX })
 
     const glossary = await loadGlossary(cwd)
 
@@ -51,6 +53,23 @@ describe('glossary presets', () => {
 
     expect(matchGlossary('是', glossary)).toBe('Yes')
     expect(composeGlossaryTranslation('是否', glossary)).toBeUndefined()
+  })
+
+  it('loads glossary preset index from project config', async () => {
+    const cwd = await createTempProject()
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+
+    const configPath = path.join(cwd, '.tmigrate', 'config.json')
+    const config = JSON.parse(await import('node:fs/promises').then(fs => fs.readFile(configPath, 'utf8'))) as {
+      glossaryPresets: { index: string }
+    }
+    config.glossaryPresets.index = LOCAL_GLOSSARY_PRESET_INDEX
+    await import('node:fs/promises').then(fs => fs.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8'))
+
+    const seeded = await initGlossary({ cwd, preset: 'ui' })
+
+    expect(seeded.entries.提交).toBe('Submit')
+    expect(seeded.entries.搜索).toBe('Search')
   })
 })
 

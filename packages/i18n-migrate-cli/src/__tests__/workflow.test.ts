@@ -2,11 +2,13 @@ import type { Translator } from '../types'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { applyTranslations, approveTranslations, initGlossary, initProject, restoreBackups, scanProject } from '../index'
 import { collectMapStats, formatMapStatsReport } from '../stats'
 
 const tempDirs: string[] = []
+const LOCAL_GLOSSARY_PRESET_INDEX = fileURLToPath(new URL('../glossary-presets/index.json', import.meta.url))
 
 class EchoTranslator implements Translator {
   async translate(texts: string[]) {
@@ -159,11 +161,11 @@ describe('i18n migrate workflow', () => {
     const glossaryPath = path.join(cwd, '.tmigrate', 'glossary.json')
     await writeFile(glossaryPath, JSON.stringify({ 提交: 'Send', 自定义: 'Custom' }, null, 2), 'utf8')
 
-    const preview = await initGlossary({ cwd, preset: 'business', dryRun: true })
+    const preview = await initGlossary({ cwd, preset: 'business', dryRun: true, presetIndex: LOCAL_GLOSSARY_PRESET_INDEX })
     expect(preview.entries.订单).toBe('Order')
     expect(JSON.parse(await readFile(glossaryPath, 'utf8')).订单).toBeUndefined()
 
-    const seeded = await initGlossary({ cwd, preset: 'all' })
+    const seeded = await initGlossary({ cwd, preset: 'all', presetIndex: LOCAL_GLOSSARY_PRESET_INDEX })
     expect(seeded.added).toBeGreaterThan(0)
     expect(seeded.skipped).toBe(1)
     expect(seeded.entries.提交).toBe('Send')
@@ -173,7 +175,7 @@ describe('i18n migrate workflow', () => {
     expect(saved.订单).toBe('Order')
     expect(saved.提交).toBe('Send')
 
-    const overwritten = await initGlossary({ cwd, preset: 'ui', overwrite: true })
+    const overwritten = await initGlossary({ cwd, preset: 'ui', overwrite: true, presetIndex: LOCAL_GLOSSARY_PRESET_INDEX })
     expect(overwritten.updated).toBe(1)
     expect(overwritten.entries.提交).toBe('Submit')
   })
@@ -182,7 +184,7 @@ describe('i18n migrate workflow', () => {
     const cwd = await createTempProject()
     await initProject({ cwd, overwrite: false, from: 'en', to: 'zh' })
 
-    const seeded = await initGlossary({ cwd, preset: 'ui' })
+    const seeded = await initGlossary({ cwd, preset: 'ui', presetIndex: LOCAL_GLOSSARY_PRESET_INDEX })
     expect(seeded.sourceLocale).toBe('en')
     expect(seeded.targetLocale).toBe('zh')
     expect(seeded.entries.Submit).toBe('提交')

@@ -90,6 +90,10 @@ export interface TranslatorOptions {
   concurrency: number
 }
 
+export interface GlossaryPresetSourceConfig {
+  index: string
+}
+
 export interface MigrateConfig {
   sourceLocale: string
   targetLocale: string
@@ -98,6 +102,7 @@ export interface MigrateConfig {
   rules: FilterRule[]
   translator: 'local' | 'api'
   translatorOptions: TranslatorOptions
+  glossaryPresets?: GlossaryPresetSourceConfig
   batchSize: number
 }
 

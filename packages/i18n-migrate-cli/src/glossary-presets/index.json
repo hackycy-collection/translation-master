@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "base": "./",
+  "presets": {
+    "ui": {
+      "zh->en": ["common.zh-en.json", "ui.zh-en.json"]
+    },
+    "business": {
+      "zh->en": ["common.zh-en.json", "business.zh-en.json"]
+    },
+    "all": {
+      "zh->en": ["common.zh-en.json", "ui.zh-en.json", "business.zh-en.json"]
+    }
+  }
+}

@@ -1,11 +1,46 @@
-import type { MigrateConfig, TranslatorOptions } from './types'
+import type { GlossaryPresetSourceConfig, MigrateConfig, TranslatorOptions } from './types'
 import path from 'node:path'
 import process from 'node:process'
 import { readJsonFile } from './fs-utils'
 
-export type MigrateConfigInput = Omit<Partial<MigrateConfig>, 'translatorOptions'> & {
+const DEFAULT_GLOSSARY_PRESET_REPO_URL = 'https://github.com/hackycy/translation-master/tree/main/packages/i18n-migrate-cli'
+
+export type MigrateConfigInput = Omit<Partial<MigrateConfig>, 'translatorOptions' | 'glossaryPresets'> & {
   translatorOptions?: Partial<TranslatorOptions>
+  glossaryPresets?: Partial<GlossaryPresetSourceConfig>
 }
+
+export function defaultGlossaryPresetIndex(): string {
+  const rawBase = githubTreeToRawBaseUrl(DEFAULT_GLOSSARY_PRESET_REPO_URL)
+  if (!rawBase)
+    throw new Error(`Unsupported default glossary preset repository URL: ${DEFAULT_GLOSSARY_PRESET_REPO_URL}`)
+
+  return new URL('src/glossary-presets/index.json', rawBase).toString()
+}
+
+export function githubTreeToRawBaseUrl(resource: string): string | undefined {
+  let url: URL
+  try {
+    url = new URL(resource)
+  }
+  catch {
+    return undefined
+  }
+
+  if (url.hostname !== 'github.com')
+    return undefined
+
+  const [owner, repo, section, ref, ...repoPathParts] = url.pathname.split('/').filter(Boolean)
+  if (!owner || !repo || section !== 'tree' || !ref)
+    return undefined
+
+  const repoPath = repoPathParts.join('/')
+  return repoPath
+    ? `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${repoPath}/`
+    : `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/`
+}
+
+const DEFAULT_GLOSSARY_PRESET_INDEX = defaultGlossaryPresetIndex()
 
 export const DEFAULT_CONFIG: MigrateConfig = {
   sourceLocale: 'zh',
@@ -29,12 +64,15 @@ export const DEFAULT_CONFIG: MigrateConfig = {
   ],
   translator: 'local',
   translatorOptions: {
-    modelBaseUrl: 'https://cdn.example.com/models',
+    modelBaseUrl: '',
     apiKey: '',
     endpoint: '',
     timeout: 30000,
     retries: 3,
     concurrency: 5,
+  },
+  glossaryPresets: {
+    index: DEFAULT_GLOSSARY_PRESET_INDEX,
   },
   batchSize: 20,
 }
@@ -46,6 +84,9 @@ export function defineConfig(config: MigrateConfigInput): MigrateConfig {
     translatorOptions: {
       ...DEFAULT_CONFIG.translatorOptions,
       ...config.translatorOptions,
+    },
+    glossaryPresets: {
+      index: config.glossaryPresets?.index ?? DEFAULT_GLOSSARY_PRESET_INDEX,
     },
   }
 }

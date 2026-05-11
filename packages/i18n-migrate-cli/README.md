@@ -98,7 +98,7 @@ tmigrate scan src --incremental --clean-deprecated
 
 ### `glossary init`
 
-把内置高频词库合并到 `.tmigrate/glossary.json`。默认使用项目配置里的 `sourceLocale` / `targetLocale`，目前内置支持 `zh -> en` 和 `en -> zh`。
+把术语预设合并到 `.tmigrate/glossary.json`。默认使用项目配置里的 `sourceLocale` / `targetLocale`，目前内置支持 `zh -> en` 和 `en -> zh`。
 
 ```bash
 tmigrate glossary init
@@ -117,6 +117,8 @@ tmigrate glossary init --preset all --overwrite
 | `--to <locale>` | 覆盖目标语言，如 `en`、`zh` |
 | `--dry-run` | 只预览新增/更新/跳过数量，不写入文件 |
 | `--overwrite` | 覆盖已有冲突词条；默认保留现有人工词条 |
+
+术语预设不再硬编码在 CLI 包里，而是通过 JSON 索引按需加载。默认索引来自 GitHub 仓库中的 [src/glossary-presets/index.json](https://github.com/hackycy/translation-master/tree/main/packages/i18n-migrate-cli/src/glossary-presets)，这样新增或修正词条不需要重新发包；只要更新仓库里的 JSON 文件即可。
 
 ### `apply`
 
@@ -257,6 +259,9 @@ tmigrate restore
     { "type": "min-length", "value": 2 }
   ],
   "translator": "local",
+  "glossaryPresets": {
+    "index": "https://raw.githubusercontent.com/hackycy/translation-master/main/packages/i18n-migrate-cli/src/glossary-presets/index.json"
+  },
   "translatorOptions": {
     "modelBaseUrl": "https://cdn.example.com/models",
     "apiKey": "",
@@ -268,6 +273,34 @@ tmigrate restore
   "batchSize": 20
 }
 ```
+
+`glossaryPresets.index` 支持三种写法：
+
+- 本地文件路径，例如 `./tmigrate/glossary/index.json`
+- 远程 JSON 索引 URL，例如 `https://cdn.example.com/tmigrate/index.json`
+- GitHub 仓库目录 URL，例如 `https://github.com/hackycy/translation-master/tree/main/packages/i18n-migrate-cli`，CLI 会自动解析到该目录下的 `src/glossary-presets/index.json`
+
+索引文件示例：
+
+```json
+{
+  "version": 1,
+  "base": "./",
+  "presets": {
+    "ui": {
+      "zh->en": ["common.zh-en.json", "ui.zh-en.json"]
+    },
+    "business": {
+      "zh->en": ["common.zh-en.json", "business.zh-en.json"]
+    },
+    "all": {
+      "zh->en": ["common.zh-en.json", "ui.zh-en.json", "business.zh-en.json"]
+    }
+  }
+}
+```
+
+如果索引里只有 `zh->en`，CLI 会在 `en->zh` 时自动反转键值，无需重复维护两份文件。
 
 ## 术语表
 
