@@ -25,7 +25,8 @@ pnpm exec tmigrate init
 # 2. 扫描源码并生成 .tmigrate/maps 分片映射
 pnpm exec tmigrate scan src --to en
 
-# 3. 校对 .tmigrate/maps 下的翻译条目，把需要回写的条目标记为 approved: true
+# 3. 校对 .tmigrate/maps 下的翻译条目，再批量标记为 approved: true
+pnpm exec tmigrate approve
 
 # 4. 预览回写 diff
 pnpm exec tmigrate apply --dry-run
@@ -42,7 +43,7 @@ pnpm exec tmigrate restore
 `tmigrate` 采用两阶段流程，避免机器翻译结果直接污染源文件：
 
 1. `scan` 扫描源码，提取源语言文本，结合术语表和翻译器生成 `.tmigrate/maps/**/*.json`。
-2. 开发者校对映射文件，修改 `translation`，并将确认过的条目标记为 `approved: true`。
+2. 开发者校对映射文件，修改 `translation`，并通过 `approve` 将确认过的条目标记为 `approved: true`。
 3. `apply` 只回写 `approved: true` 且未标记 `skip` 的条目。
 4. `apply` 写入前会备份原文件到 `.tmigrate/backups/`，可用 `restore` 回滚。
 
@@ -106,6 +107,29 @@ tmigrate apply
 |---|---|
 | `--dry-run` | 只打印 diff，不写入文件 |
 | `--path <path>` | 只处理指定文件或目录 |
+
+### `approve`
+
+批量把 `.tmigrate/maps/` 中可回写的译文标记为 `approved: true`，适合大型项目在人工抽检或统一信任机器翻译后批量放行。
+
+```bash
+tmigrate approve --dry-run
+tmigrate approve --path src/views/Login.vue
+tmigrate approve --path src/modules/order
+tmigrate approve
+```
+
+默认只批准有 `translation`、未标记 `skip`、未标记 `deprecated` 的条目，避免误回写空译文或废弃文案。
+
+常用选项：
+
+| 选项 | 说明 |
+|---|---|
+| `--dry-run` | 只统计将批准的条目，不写入 map 文件 |
+| `--path <path>` | 只处理指定源文件或目录对应的 map |
+| `--include-skipped` | 也批准 `skip: true` 的条目 |
+| `--include-deprecated` | 也批准 `deprecated: true` 的条目 |
+| `--allow-empty` | 也批准空译文条目 |
 
 ### `restore`
 

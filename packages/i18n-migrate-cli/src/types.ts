@@ -172,6 +172,30 @@ export interface ApplyResult {
   dryRun: boolean
 }
 
+export interface ApproveOptions {
+  cwd?: string
+  path?: string
+  dryRun?: boolean
+  includeSkipped?: boolean
+  includeDeprecated?: boolean
+  allowEmpty?: boolean
+}
+
+export interface ApproveFileChange {
+  sourcePath: string
+  mapPath: string
+  changed: boolean
+  approved: number
+  alreadyApproved: number
+  skipped: number
+  total: number
+}
+
+export interface ApproveResult {
+  files: ApproveFileChange[]
+  dryRun: boolean
+}
+
 export interface RestoreOptions {
   cwd?: string
   path?: string

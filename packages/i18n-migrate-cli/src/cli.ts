@@ -3,6 +3,7 @@ import process from 'node:process'
 import { Command } from 'commander'
 import pc from 'picocolors'
 import { applyTranslations, restoreBackups } from './apply'
+import { approveTranslations } from './approve'
 import { initProject } from './init'
 import { createSpinner } from './prompts'
 import { scanProject } from './scanner'
@@ -52,6 +53,36 @@ export function createCli(options: CreateCliOptions): Command {
         onProgress: progress.update,
       }, progress)
       console.log(pc.green(`Scanned ${result.scannedFiles} file(s), skipped ${result.skippedFiles}, extracted ${result.extractedTexts} text(s).`))
+    })
+
+  program
+    .command('approve')
+    .description('Mark map entries as approved in bulk.')
+    .option('--dry-run', 'preview approval counts without writing map files')
+    .option('--path <path>', 'limit approval to a source file or directory')
+    .option('--include-skipped', 'also approve entries marked with skip: true')
+    .option('--include-deprecated', 'also approve entries marked with deprecated: true')
+    .option('--allow-empty', 'also approve entries with empty translations')
+    .action(async (command: {
+      dryRun?: boolean
+      path?: string
+      includeSkipped?: boolean
+      includeDeprecated?: boolean
+      allowEmpty?: boolean
+    }) => {
+      const result = await approveTranslations({
+        dryRun: command.dryRun,
+        path: command.path,
+        includeSkipped: command.includeSkipped,
+        includeDeprecated: command.includeDeprecated,
+        allowEmpty: command.allowEmpty,
+      })
+      const approved = result.files.reduce((sum, file) => sum + file.approved, 0)
+      const changed = result.files.filter(file => file.changed).length
+      const skipped = result.files.reduce((sum, file) => sum + file.skipped, 0)
+      console.log(pc.green(`${result.dryRun ? 'Would approve' : 'Approved'} ${approved} entries in ${changed} map file(s).`))
+      if (skipped > 0)
+        console.log(pc.dim(`Skipped ${skipped} entries (skip/deprecated/empty translation).`))
     })
 
   program

@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { applyTranslations, initProject, restoreBackups, scanProject } from '../index'
+import { applyTranslations, approveTranslations, initProject, restoreBackups, scanProject } from '../index'
 
 const tempDirs: string[] = []
 
@@ -91,6 +91,65 @@ describe('i18n migrate workflow', () => {
 
     const preview = await applyTranslations({ cwd, dryRun: true })
     expect(preview.files[0]?.diff).toContain('+<template><h1>中文:Order Management</h1><button title="Create order">搜索</button></template>')
+  })
+
+  it('bulk approves safe map entries and supports scoped overrides', async () => {
+    const cwd = await createTempProject()
+    const appPath = path.join(cwd, 'src', 'App.vue')
+    const settingsPath = path.join(cwd, 'src', 'Settings.vue')
+    await mkdir(path.dirname(appPath), { recursive: true })
+    await writeFile(appPath, '<template><p>请输入用户名</p><p>跳过此项</p><p>空译文</p></template>\n', 'utf8')
+    await writeFile(settingsPath, '<template><button>保存设置</button></template>\n', 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+
+    const appMapPath = path.join(cwd, '.tmigrate', 'maps', 'src', 'App.vue.json')
+    const settingsMapPath = path.join(cwd, '.tmigrate', 'maps', 'src', 'Settings.vue.json')
+    const appMap = JSON.parse(await readFile(appMapPath, 'utf8')) as {
+      entries: Record<string, { approved: boolean, translation: string, skip?: boolean, deprecated?: boolean }>
+    }
+    appMap.entries['跳过此项']!.skip = true
+    appMap.entries['空译文']!.translation = ''
+    appMap.entries['旧文案'] = {
+      approved: false,
+      translation: 'Old copy',
+      skip: false,
+      deprecated: true,
+    }
+    await writeFile(appMapPath, JSON.stringify(appMap, null, 2), 'utf8')
+
+    const preview = await approveTranslations({ cwd, path: 'src/App.vue', dryRun: true })
+    expect(preview.files).toMatchObject([
+      { sourcePath: 'src/App.vue', approved: 1, skipped: 3, changed: true },
+    ])
+    expect(JSON.parse(await readFile(appMapPath, 'utf8')).entries['请输入用户名'].approved).toBe(false)
+
+    const approved = await approveTranslations({ cwd, path: 'src/App.vue' })
+    expect(approved.files).toMatchObject([
+      { sourcePath: 'src/App.vue', approved: 1, skipped: 3, changed: true },
+    ])
+
+    const nextAppMap = JSON.parse(await readFile(appMapPath, 'utf8')) as typeof appMap
+    expect(nextAppMap.entries['请输入用户名']?.approved).toBe(true)
+    expect(nextAppMap.entries['跳过此项']?.approved).toBe(false)
+    expect(nextAppMap.entries['空译文']?.approved).toBe(false)
+    expect(nextAppMap.entries['旧文案']?.approved).toBe(false)
+
+    const settingsMap = JSON.parse(await readFile(settingsMapPath, 'utf8')) as typeof appMap
+    expect(settingsMap.entries['保存设置']?.approved).toBe(false)
+
+    await approveTranslations({
+      cwd,
+      path: 'src/App.vue',
+      includeSkipped: true,
+      includeDeprecated: true,
+      allowEmpty: true,
+    })
+    const overriddenAppMap = JSON.parse(await readFile(appMapPath, 'utf8')) as typeof appMap
+    expect(overriddenAppMap.entries['跳过此项']?.approved).toBe(true)
+    expect(overriddenAppMap.entries['空译文']?.approved).toBe(true)
+    expect(overriddenAppMap.entries['旧文案']?.approved).toBe(true)
   })
 })
 

@@ -1,4 +1,5 @@
 export { applyTranslations, restoreBackups } from './apply'
+export { approveTranslations } from './approve'
 export { backupFile, listBackupEntries, loadBackupMeta, saveBackupMeta } from './backup'
 export { loadScanMeta, saveScanMeta } from './cache'
 export { createCli } from './cli'
@@ -22,6 +23,9 @@ export { translateTexts } from './translator/pipeline'
 export type {
   ApplyOptions,
   ApplyResult,
+  ApproveFileChange,
+  ApproveOptions,
+  ApproveResult,
   BackupMeta,
   BackupMetaEntry,
   FileChange,
