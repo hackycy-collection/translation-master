@@ -34,13 +34,16 @@ pnpm exec tmigrate approve
 # 3.5. 先统计当前进度，看看还差什么
 pnpm exec tmigrate stats
 
-# 4. 预览回写 diff
+# 4. 可选：把 scan map 转换为传统 locale 语言包
+pnpm exec tmigrate convert src --format ts --namespace app
+
+# 5. 预览回写 diff
 pnpm exec tmigrate apply --dry-run
 
-# 5. 写回源文件
+# 6. 写回源文件
 pnpm exec tmigrate apply
 
-# 6. 如需回滚，从自动备份恢复
+# 7. 如需回滚，从自动备份恢复
 pnpm exec tmigrate restore
 ```
 
@@ -52,6 +55,8 @@ pnpm exec tmigrate restore
 2. 开发者校对映射文件，修改 `translation`，并通过 `approve` 将确认过的条目标记为 `approved: true`。
 3. `apply` 只回写 `approved: true` 且未标记 `skip` 的条目。
 4. `apply` 写入前会备份原文件到 `.tmigrate/backups/`，可用 `restore` 回滚。
+
+也可以在校对后执行 `convert`，把 `.tmigrate/maps` 转成传统 `locales/langs/<locale>/...` 语言包。`convert` 不修改源码，只生成 locale 文件。
 
 ### 翻译器后端
 
@@ -167,6 +172,51 @@ pnpm add -D @translation-master/chrome
 | `chromeKeepAlive` | 扫描结束后是否保留浏览器进程，默认 `false` |
 
 执行时会显示阶段式进度提示：准备中、扫描可回写文件、逐个处理文件、写入源文件。
+
+### `convert`
+
+把 `.tmigrate/maps/**/*.json` 转换为传统 locale 语言包。默认输出到 `locales/langs`，同时生成源语言包和目标语言包：
+
+```bash
+tmigrate convert
+tmigrate convert src/components --format ts
+tmigrate convert src --output-dir packages/app/locales/langs --namespace admin
+tmigrate convert src --target-only
+tmigrate convert src --translate-missing
+tmigrate convert src --dry-run
+```
+
+例如 `src/components/Table.vue` 对应的 map 会生成：
+
+```text
+locales/langs/zh/admin/components/Table.ts
+locales/langs/en/admin/components/Table.ts
+```
+
+生成内容是平铺字典。源语言包使用原文作为值，目标语言包使用 map 中的译文：
+
+```ts
+export default {
+  "提交": "Submit",
+  "请输入用户名": "Please enter your username"
+}
+```
+
+常用选项：
+
+| 选项 | 说明 |
+|---|---|
+| `[path]` | 只转换指定源文件或目录对应的 map |
+| `--output-dir <dir>` | 输出目录，默认 `locales/langs` |
+| `--format <format>` | 输出格式：`json`、`js`、`ts` |
+| `--namespace <dir>` | 每个 locale 目录下额外增加一层目录，避免和现有语言包冲突 |
+| `--from <locale>` | 源语言包 locale 名，默认使用配置里的 `sourceLocale` |
+| `--to <locale>` | 目标语言包 locale 名，默认使用配置里的 `targetLocale` |
+| `--target-only` | 只生成目标语言包 |
+| `--translate-missing` | 对已批准但译文为空的条目复用 scan 的翻译配置补译 |
+| `--dry-run` | 只预览将生成的文件，不写入 |
+
+默认只转换 `approved: true`、未标记 `skip`、未标记 `deprecated` 的条目。如果多个 map 最终落到同一个 locale 文件，后处理的条目会覆盖同名 key。
 
 #### 回写转义策略
 
@@ -289,6 +339,13 @@ tmigrate restore
   "translator": "local",
   "glossaryPresets": {
     "index": "https://raw.githubusercontent.com/hackycy/translation-master/main/packages/i18n-migrate-cli/src/glossary-presets/index.json"
+  },
+  "convert": {
+    "outputDir": "locales/langs",
+    "format": "json",
+    "namespace": "app",
+    "includeSourceLocale": true,
+    "translateMissing": false
   },
   "translatorOptions": {
     "modelBaseUrl": "https://cdn.example.com/models",
@@ -481,6 +538,7 @@ await applyTranslations({ cwd: process.cwd(), dryRun: true })
 | `initProject()` | 初始化 `.tmigrate` |
 | `initGlossary()` | 合并内置词库到 `.tmigrate/glossary.json` |
 | `scanProject()` | 扫描源码并生成 map |
+| `convertMaps()` | 把 map 转换为 locale 语言包 |
 | `applyTranslations()` | 回写已确认译文 |
 | `restoreBackups()` | 从备份恢复 |
 | `defineConfig()` / `loadConfig()` | 生成或读取配置 |

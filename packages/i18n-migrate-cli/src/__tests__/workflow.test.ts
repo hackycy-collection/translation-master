@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { applyTranslations, approveTranslations, initGlossary, initProject, restoreBackups, scanProject } from '../index'
+import { applyTranslations, approveTranslations, convertMaps, initGlossary, initProject, restoreBackups, scanProject } from '../index'
 import { collectMapStats, formatMapStatsReport } from '../stats'
 
 const tempDirs: string[] = []
@@ -153,6 +153,68 @@ describe('i18n migrate workflow', () => {
     expect(overriddenAppMap.entries['跳过此项']?.approved).toBe(true)
     expect(overriddenAppMap.entries['空译文']?.approved).toBe(true)
     expect(overriddenAppMap.entries['旧文案']?.approved).toBe(true)
+  })
+
+  it('converts approved maps into source and target locale packages', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'components', 'Table.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, '<template><button>提交</button><p>请输入用户名</p></template>\n', 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh-CN', to: 'en-US' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    await approveTranslations({ cwd })
+
+    const result = await convertMaps({
+      cwd,
+      path: 'src/components',
+      outputDir: 'locales/langs',
+      namespace: 'admin',
+      format: 'ts',
+    })
+
+    expect(result.files).toMatchObject([
+      { locale: 'en-US', outputPath: 'locales/langs/en-US/admin/components/Table.ts', entries: 2, changed: true },
+      { locale: 'zh-CN', outputPath: 'locales/langs/zh-CN/admin/components/Table.ts', entries: 2, changed: true },
+    ])
+
+    const target = await readFile(path.join(cwd, 'locales', 'langs', 'en-US', 'admin', 'components', 'Table.ts'), 'utf8')
+    const source = await readFile(path.join(cwd, 'locales', 'langs', 'zh-CN', 'admin', 'components', 'Table.ts'), 'utf8')
+
+    expect(target).toBe(`export default {\n  "提交": "EN:提交",\n  "请输入用户名": "EN:请输入用户名"\n}\n`)
+    expect(source).toBe(`export default {\n  "提交": "提交",\n  "请输入用户名": "请输入用户名"\n}\n`)
+  })
+
+  it('supports target-only json conversion and translates approved empty entries on demand', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'Profile.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, '<template><button>保存设置</button></template>\n', 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+
+    const mapPath = path.join(cwd, '.tmigrate', 'maps', 'src', 'views', 'Profile.vue.json')
+    const map = JSON.parse(await readFile(mapPath, 'utf8')) as {
+      entries: Record<string, { approved: boolean, translation: string }>
+    }
+    map.entries['保存设置']!.approved = true
+    map.entries['保存设置']!.translation = ''
+    await writeFile(mapPath, JSON.stringify(map, null, 2), 'utf8')
+
+    const result = await convertMaps({
+      cwd,
+      format: 'json',
+      includeSourceLocale: false,
+      translateMissing: true,
+      translator: new EchoTranslator(),
+    })
+
+    expect(result.files).toMatchObject([
+      { locale: 'en', outputPath: 'locales/langs/en/views/Profile.json', entries: 1, changed: true },
+    ])
+    expect(await readFile(path.join(cwd, 'locales', 'langs', 'en', 'views', 'Profile.json'), 'utf8'))
+      .toBe(`{\n  "保存设置": "EN:保存设置"\n}\n`)
   })
 
   it('seeds glossary presets without clobbering existing manual terms by default', async () => {

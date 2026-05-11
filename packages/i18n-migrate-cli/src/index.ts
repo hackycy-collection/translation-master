@@ -4,6 +4,7 @@ export { backupFile, listBackupEntries, loadBackupMeta, saveBackupMeta } from '.
 export { loadScanMeta, saveScanMeta } from './cache'
 export { createCli } from './cli'
 export { DEFAULT_CONFIG, defineConfig, loadConfig } from './config'
+export { convertMaps } from './converter'
 export { Extractor } from './extractor'
 export { composeGlossaryTranslation, enforceGlossaryTerms, initGlossary, loadGlossary, matchGlossary } from './glossary'
 export type { Glossary, GlossaryPresetName, InitGlossaryOptions, InitGlossaryResult } from './glossary'
@@ -31,6 +32,10 @@ export type {
   ApproveResult,
   BackupMeta,
   BackupMetaEntry,
+  ConvertConfig,
+  ConvertFileChange,
+  ConvertOptions,
+  ConvertResult,
   FileChange,
   FileParser,
   FilterRule,

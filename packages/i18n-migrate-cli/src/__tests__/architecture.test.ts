@@ -149,6 +149,19 @@ describe('i18n migrate architecture primitives', () => {
     expect(shouldTranslate({ text: '订单管理', context: 'template', sourceLocale: 'en' }, config.rules)).toBe(false)
   })
 
+  it('adds configured convert output directory to scan excludes', () => {
+    const config = defineConfig({
+      exclude: ['node_modules'],
+      convert: {
+        outputDir: 'packages/app/locales/langs',
+      },
+    })
+
+    expect(config.exclude).toContain('node_modules')
+    expect(config.exclude).toContain('packages/app/locales/langs')
+    expect(config.exclude).toContain('packages/app/locales/langs/**')
+  })
+
   it('prefers popular languages in init locale options', () => {
     const options = getInitLocaleOptions()
     const codes = options.map(option => option.value)

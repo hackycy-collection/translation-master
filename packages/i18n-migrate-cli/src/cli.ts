@@ -5,6 +5,7 @@ import { Command } from 'commander'
 import pc from 'picocolors'
 import { applyTranslations, restoreBackups } from './apply'
 import { approveTranslations } from './approve'
+import { convertMaps } from './converter'
 import { initGlossary } from './glossary'
 import { initProject } from './init'
 import { createSpinner } from './prompts'
@@ -94,6 +95,50 @@ export function createCli(options: CreateCliOptions): Command {
     })
 
   program
+    .command('convert [path]')
+    .description('Convert scan maps into locale package files.')
+    .option('-o, --output-dir <dir>', 'locale package output directory, defaults to locales/langs')
+    .option('-f, --format <format>', 'output format: json, js, ts')
+    .option('--namespace <dir>', 'extra directory below each locale folder')
+    .option('--from <locale>', 'source locale for generated source package')
+    .option('--to <locale>', 'target locale for generated target package')
+    .option('--target-only', 'only generate target locale package')
+    .option('--translate-missing', 'translate approved entries with empty translations before converting')
+    .option('--dry-run', 'preview generated locale package files without writing')
+    .action(async (targetPath: string | undefined, command: {
+      outputDir?: string
+      format?: string
+      namespace?: string
+      from?: string
+      to?: string
+      targetOnly?: boolean
+      translateMissing?: boolean
+      dryRun?: boolean
+    }) => {
+      const progress = createWorkflowProgressRenderer('convert')
+      const result = await convertMaps({
+        path: targetPath,
+        outputDir: command.outputDir,
+        format: normalizeConvertFormat(command.format),
+        namespace: command.namespace,
+        sourceLocale: command.from,
+        targetLocale: command.to,
+        includeSourceLocale: command.targetOnly ? false : undefined,
+        translateMissing: command.translateMissing,
+        dryRun: command.dryRun,
+        onProgress: progress.update,
+      })
+      progress.stop('Convert finished.')
+      const changed = result.files.filter(file => file.changed).length
+      const totalEntries = result.files.reduce((sum, file) => sum + file.entries, 0)
+      console.log(pc.green(`${result.dryRun ? 'Would write' : 'Converted'} ${changed} locale file(s), ${totalEntries} entr${totalEntries === 1 ? 'y' : 'ies'}.`))
+      if (result.files.length > 0) {
+        for (const file of result.files)
+          console.log(pc.dim(`${file.outputPath}\t${file.entries} entries`))
+      }
+    })
+
+  program
     .command('stats [path]')
     .description('Summarize map files and translation progress.')
     .action(async (targetPath: string | undefined) => {
@@ -177,6 +222,14 @@ export function createCli(options: CreateCliOptions): Command {
     })
 
   return program
+}
+
+function normalizeConvertFormat(value: string | undefined) {
+  if (!value)
+    return undefined
+  if (value === 'json' || value === 'js' || value === 'ts')
+    return value
+  throw new Error(`Unsupported locale package format "${value}". Expected json, js, or ts.`)
 }
 
 function normalizeInitTranslator(value: string | undefined): 'local' | 'api' | 'chrome' | undefined {
@@ -278,7 +331,7 @@ function createScanProgressRenderer(): { update: (event: ScanProgressEvent) => v
   }
 }
 
-function createWorkflowProgressRenderer(_action: 'approve' | 'apply' | 'restore'): { update: (event: WorkflowProgressEvent) => void, stop: (message: string) => void } {
+function createWorkflowProgressRenderer(_action: 'approve' | 'apply' | 'restore' | 'convert'): { update: (event: WorkflowProgressEvent) => void, stop: (message: string) => void } {
   const spinner = createSpinner()
   let started = false
   let finished = false
@@ -331,12 +384,14 @@ function createWorkflowProgressRenderer(_action: 'approve' | 'apply' | 'restore'
   }
 }
 
-function actionLabel(action: 'approve' | 'apply' | 'restore'): string {
+function actionLabel(action: 'approve' | 'apply' | 'restore' | 'convert'): string {
   if (action === 'approve')
     return 'Approving'
   if (action === 'apply')
     return 'Applying'
-  return 'Restoring'
+  if (action === 'restore')
+    return 'Restoring'
+  return 'Converting'
 }
 
 function formatModelLoadMessage(

@@ -245,6 +245,43 @@ tmigrate stats src/modules/order
 
 注意这里统计的是 **map 条目数**，不是源码里重复出现的文本命中次数。因为同一个原文在同一文件里通常只保留一个条目，统计命中次数会误导进度判断。
 
+### 阶段四：转换为 locale 语言包
+
+`convert` 命令读取 `.tmigrate/maps/`，把分片 map 投影成传统前端语言包。它不修改源码，也不依赖 `apply`：
+
+```bash
+tmigrate convert src --format ts --namespace admin
+tmigrate convert src --output-dir locales/langs --target-only
+tmigrate convert src --translate-missing
+```
+
+默认输出目录是 `locales/langs`，路径形态为：
+
+```text
+源文件:  src/components/Table.vue
+源包:    locales/langs/zh/admin/components/Table.ts
+目标包:  locales/langs/en/admin/components/Table.ts
+```
+
+生成对象是平铺字典：
+
+```ts
+export default {
+  "提交": "Submit"
+}
+```
+
+转换规则：
+
+- 只转换 `approved: true`、未 `skip`、未 `deprecated` 的条目。
+- 源语言包值为原文，目标语言包值为 map 中 `translation`。
+- `json` 输出纯 JSON；`js` / `ts` 输出稳定的 `export default {}`。
+- `--namespace` 会插入到 `<locale>/` 下一级，用于避开既有语言包。
+- 如果多个 map 映射到同一个输出文件，后处理的 key 会覆盖同名 key。
+- 如果开启 `--translate-missing`，已批准但译文为空的条目会复用 scan 的翻译配置、术语表和翻译器补译后再输出。
+
+当 `.tmigrate/config.json` 中配置了 `convert.outputDir`，`loadConfig` 会把该目录加入扫描排除规则，避免生成的 locale 文件再次被 `scan` 处理。
+
 ### 回滚
 
 `apply` 执行时自动将原文件备份到 `.tmigrate/backups/`，保留目录结构。`restore` 命令从备份恢复，不依赖 source map 反向推导。

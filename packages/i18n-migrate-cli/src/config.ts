@@ -1,13 +1,14 @@
-import type { GlossaryPresetSourceConfig, MigrateConfig, TranslatorOptions } from './types'
+import type { ConvertConfig, GlossaryPresetSourceConfig, MigrateConfig, TranslatorOptions } from './types'
 import path from 'node:path'
 import process from 'node:process'
 import { readJsonFile } from './fs-utils'
 
 const DEFAULT_GLOSSARY_PRESET_REPO_URL = 'https://github.com/hackycy/translation-master/tree/main/packages/i18n-migrate-cli'
 
-export type MigrateConfigInput = Omit<Partial<MigrateConfig>, 'translatorOptions' | 'glossaryPresets'> & {
+export type MigrateConfigInput = Omit<Partial<MigrateConfig>, 'convert' | 'translatorOptions' | 'glossaryPresets'> & {
   translatorOptions?: Partial<TranslatorOptions>
   glossaryPresets?: Partial<GlossaryPresetSourceConfig>
+  convert?: Partial<ConvertConfig>
 }
 
 export function defaultGlossaryPresetIndex(): string {
@@ -41,6 +42,13 @@ export function githubTreeToRawBaseUrl(resource: string): string | undefined {
 }
 
 const DEFAULT_GLOSSARY_PRESET_INDEX = defaultGlossaryPresetIndex()
+
+const DEFAULT_CONVERT_CONFIG: ConvertConfig = {
+  outputDir: 'locales/langs',
+  format: 'json',
+  includeSourceLocale: true,
+  translateMissing: false,
+}
 
 export const DEFAULT_CONFIG: MigrateConfig = {
   sourceLocale: 'zh',
@@ -79,13 +87,24 @@ export const DEFAULT_CONFIG: MigrateConfig = {
   glossaryPresets: {
     index: DEFAULT_GLOSSARY_PRESET_INDEX,
   },
+  convert: DEFAULT_CONVERT_CONFIG,
   batchSize: 20,
 }
 
 export function defineConfig(config: MigrateConfigInput): MigrateConfig {
+  const convert: ConvertConfig = {
+    ...DEFAULT_CONVERT_CONFIG,
+    ...config.convert,
+    outputDir: config.convert?.outputDir ?? DEFAULT_CONVERT_CONFIG.outputDir,
+    format: config.convert?.format ?? DEFAULT_CONVERT_CONFIG.format,
+    includeSourceLocale: config.convert?.includeSourceLocale ?? DEFAULT_CONVERT_CONFIG.includeSourceLocale,
+    translateMissing: config.convert?.translateMissing ?? DEFAULT_CONVERT_CONFIG.translateMissing,
+  }
+
   return {
     ...DEFAULT_CONFIG,
     ...config,
+    exclude: mergeExcludeWithConvertOutput(config.exclude ?? DEFAULT_CONFIG.exclude, convert.outputDir),
     translatorOptions: {
       ...DEFAULT_CONFIG.translatorOptions,
       ...config.translatorOptions,
@@ -93,7 +112,21 @@ export function defineConfig(config: MigrateConfigInput): MigrateConfig {
     glossaryPresets: {
       index: config.glossaryPresets?.index ?? DEFAULT_GLOSSARY_PRESET_INDEX,
     },
+    convert,
   }
+}
+
+function mergeExcludeWithConvertOutput(exclude: string[], outputDir: string): string[] {
+  const normalizedOutput = outputDir.replace(/\\/g, '/').replace(/\/$/, '')
+  if (!normalizedOutput)
+    return exclude
+
+  const next = [...exclude]
+  if (!next.includes(normalizedOutput))
+    next.push(normalizedOutput)
+  if (!next.includes(`${normalizedOutput}/**`))
+    next.push(`${normalizedOutput}/**`)
+  return next
 }
 
 export async function loadConfig(cwd = process.cwd(), overrides: MigrateConfigInput = {}): Promise<MigrateConfig> {

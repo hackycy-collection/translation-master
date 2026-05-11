@@ -99,6 +99,18 @@ export interface GlossaryPresetSourceConfig {
   index: string
 }
 
+export type LocalePackageFormat = 'json' | 'js' | 'ts'
+
+export interface ConvertConfig {
+  outputDir: string
+  format: LocalePackageFormat
+  namespace?: string
+  sourceLocale?: string
+  targetLocale?: string
+  includeSourceLocale: boolean
+  translateMissing: boolean
+}
+
 export interface MigrateConfig {
   sourceLocale: string
   targetLocale: string
@@ -108,6 +120,7 @@ export interface MigrateConfig {
   translator: 'local' | 'api' | 'chrome'
   translatorOptions: TranslatorOptions
   glossaryPresets?: GlossaryPresetSourceConfig
+  convert?: ConvertConfig
   batchSize: number
 }
 
@@ -221,6 +234,36 @@ export interface RestoreResult {
   available: BackupMetaEntry[]
 }
 
+export interface ConvertOptions {
+  cwd?: string
+  path?: string
+  outputDir?: string
+  format?: LocalePackageFormat
+  namespace?: string
+  sourceLocale?: string
+  targetLocale?: string
+  includeSourceLocale?: boolean
+  translateMissing?: boolean
+  dryRun?: boolean
+  translator?: Translator
+  onProgress?: (event: WorkflowProgressEvent) => void
+}
+
+export interface ConvertFileChange {
+  locale: string
+  outputPath: string
+  changed: boolean
+  entries: number
+  sourceMaps: string[]
+}
+
+export interface ConvertResult {
+  files: ConvertFileChange[]
+  dryRun: boolean
+  outputDir: string
+  format: LocalePackageFormat
+}
+
 export interface MapStatsBucket {
   mapFiles: number
   entries: number
@@ -263,6 +306,6 @@ export interface MapStatsReport {
 export type WorkflowProgressEvent
   = | { phase: 'prepare', message: string }
     | { phase: 'discover', message: string, total?: number }
-    | { phase: 'file', path: string, current: number, total: number, action: 'approve' | 'apply' | 'restore', dryRun?: boolean }
-    | { phase: 'write', path: string, current: number, total: number, action: 'approve' | 'apply' | 'restore' }
+    | { phase: 'file', path: string, current: number, total: number, action: 'approve' | 'apply' | 'restore' | 'convert', dryRun?: boolean }
+    | { phase: 'write', path: string, current: number, total: number, action: 'approve' | 'apply' | 'restore' | 'convert' }
     | { phase: 'done', message: string }

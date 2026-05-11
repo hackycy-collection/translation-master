@@ -80,7 +80,7 @@ class LazyChromeTranslator implements Translator {
 
 async function loadChromeTranslator(options: ConstructorParameters<ChromeTranslatorConstructor>[0]): Promise<Translator> {
   try {
-    const mod = await import('@translation-master/chrome') as { ChromeTranslator: ChromeTranslatorConstructor }
+    const mod = await import(/* @vite-ignore */ '@translation-master/chrome') as { ChromeTranslator: ChromeTranslatorConstructor }
     return new mod.ChromeTranslator(options)
   }
   catch (error) {
