@@ -158,14 +158,12 @@ tmigrate scan ./src --incremental --clean-deprecated
 `scan` 会按架构阶段持续刷新终端提示，避免本地模型首次加载或下载时看起来像“卡住”：
 
 ```text
-Loading .tmigrate config and glossary
-Discovering source files
-Discovered 12 source file(s)
-Scanning src/views/Login.vue (1/12)
-Loading local model: Xenova/opus-mt-zh-en 37% (model.onnx)
-Local model ready: Xenova/opus-mt-zh-en
-Translating src/views/Login.vue: 20/46 text(s), batch 1/3
-Writing map for src/views/Login.vue (1/12)
+Preparing translation workspace
+Scanning source files (12 found)
+Processing src/views/Login.vue (1/12)
+Processing src/views/Login.vue (1/12) · loading local model (Xenova/opus-mt-zh-en)
+Processing src/views/Login.vue · translating 20/46 texts (batch 1/3)
+Processing src/views/Login.vue · saving map
 Scan finished.
 Scanned 12 file(s), skipped 0, extracted 184 text(s).
 ```
@@ -174,15 +172,15 @@ Scanned 12 file(s), skipped 0, extracted 184 text(s).
 
 | 终端提示 | 内部模块 | 说明 |
 |----------|----------|------|
-| `Loading .tmigrate config and glossary` | `config.ts` / `glossary.ts` | 读取配置、术语表，并合并命令行参数 |
-| `Discovering source files` | `scanner.ts` | 根据 include/exclude 和目标路径查找待扫描文件 |
-| `Scanning ...` | `Extractor` / `Parser` | 解析当前文件并提取源语言文本 |
-| `Loading local model ...` | `LocalTranslator` / `@translation-master/node` | 本地 ONNX 模型加载或下载进度，展示模型 ID、进度和当前文件 |
-| `Translating ...` | `translator/pipeline.ts` | 展示机器翻译文本数和批次进度；术语表命中的文本不会进入机器翻译 |
-| `Writing map ...` | `mapping.ts` | 合并旧映射、保留人工修改，并写入 `.tmigrate/maps/` |
+| `Preparing translation workspace` | `config.ts` / `glossary.ts` | 读取配置、术语表，并合并命令行参数 |
+| `Scanning source files ...` | `scanner.ts` | 根据 include/exclude 和目标路径查找待扫描文件 |
+| `Processing ...` | `Extractor` / `Parser` | 解析当前文件并提取源语言文本 |
+| `Processing ... loading local model ...` | `LocalTranslator` / `@translation-master/node` | 本地 ONNX 模型加载或下载中，仍保持在当前文件上下文里 |
+| `Processing ... translating ...` | `translator/pipeline.ts` | 展示机器翻译文本数和批次进度；术语表命中的文本不会进入机器翻译 |
+| `Processing ... saving map` | `mapping.ts` | 合并旧映射、保留人工修改，并写入 `.tmigrate/maps/` |
 | `Scan finished.` | `cli.ts` | 扫描结束，随后打印汇总统计 |
 
-当配置为 `translator: "api"` 且提供 `translatorOptions.endpoint` 时，终端仍会展示扫描、翻译批次和写入进度，但不会出现 `Loading local model ...`。
+当配置为 `translator: "api"` 且提供 `translatorOptions.endpoint` 时，终端仍会展示扫描、翻译批次和写入进度，但不会出现模型加载提示。
 
 ### 阶段二：人工确认 + 回写
 

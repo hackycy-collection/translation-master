@@ -5,6 +5,11 @@ export interface PipelineInstance {
   dispose?: () => Promise<void>
 }
 
+export interface AcquireResult {
+  pipeline: PipelineInstance
+  freshlyLoaded: boolean
+}
+
 interface PoolEntry {
   pipeline: PipelineInstance | null
   refCount: number
@@ -47,7 +52,7 @@ export class ModelPool {
     options: Record<string, unknown>,
     loadFn: (modelId: string, task: string, options: Record<string, unknown>) => Promise<PipelineInstance>,
     progressCallback?: (event: unknown) => void,
-  ): Promise<PipelineInstance> {
+  ): Promise<AcquireResult> {
     const entry = this.pool.get(modelId)
 
     // Already loaded
@@ -55,13 +60,19 @@ export class ModelPool {
       entry.refCount++
       entry.lastAccess = Date.now()
       this.touchLRU(modelId)
-      return entry.pipeline
+      return {
+        pipeline: entry.pipeline,
+        freshlyLoaded: false,
+      }
     }
 
     // Currently loading — share the same promise
     if (entry && entry.loading) {
       entry.refCount++
-      return entry.loading
+      return {
+        pipeline: await entry.loading,
+        freshlyLoaded: false,
+      }
     }
 
     // Need to load — first check pool capacity
@@ -84,7 +95,10 @@ export class ModelPool {
         existing.pipeline = pipeline
         existing.loading = null
       }
-      return pipeline
+      return {
+        pipeline,
+        freshlyLoaded: true,
+      }
     }
     catch (err) {
       // Remove failed entry

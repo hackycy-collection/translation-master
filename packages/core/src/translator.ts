@@ -236,7 +236,7 @@ export class Translator {
       this.events.emit('modelLoad', modelEvent)
     }
 
-    const pipeline = await this.pool.acquire(
+    const { pipeline, freshlyLoaded } = await this.pool.acquire(
       resolved.modelId,
       'translation',
       options,
@@ -244,12 +244,13 @@ export class Translator {
       progressCallback,
     )
 
-    // Pipeline is fully loaded — emit 'ready' so listeners can react
-    this.events.emit('modelLoad', {
-      modelId: resolved.modelId,
-      progress: 100,
-      state: 'ready',
-    })
+    if (freshlyLoaded) {
+      this.events.emit('modelLoad', {
+        modelId: resolved.modelId,
+        progress: 100,
+        state: 'ready',
+      })
+    }
 
     return pipeline
   }

@@ -111,10 +111,17 @@ function createScanProgressRenderer(): { update: (event: ScanProgressEvent) => v
   const spinner = createSpinner()
   let started = false
   let finished = false
+  let currentFilePath: string | undefined
+  let currentFileIndex = 0
+  let currentFileTotal = 0
+  let lastMessage = ''
 
   const startOrUpdate = (message: string) => {
     if (finished)
       return
+    if (message === lastMessage)
+      return
+    lastMessage = message
     if (started) {
       spinner.message(message)
       return
@@ -126,32 +133,45 @@ function createScanProgressRenderer(): { update: (event: ScanProgressEvent) => v
   return {
     update(event) {
       if (event.phase === 'config') {
-        startOrUpdate(event.message)
+        startOrUpdate('Preparing translation workspace')
         return
       }
       if (event.phase === 'discover') {
-        startOrUpdate(event.message)
+        if (event.totalFiles !== undefined) {
+          startOrUpdate(`Scanning source files (${event.totalFiles} found)`)
+        }
+        else {
+          startOrUpdate('Scanning source files')
+        }
         return
       }
       if (event.phase === 'file') {
-        startOrUpdate(`Scanning ${event.filePath} (${event.current}/${event.total})`)
+        currentFilePath = event.filePath
+        currentFileIndex = event.current
+        currentFileTotal = event.total
+        startOrUpdate(`Processing ${event.filePath} (${event.current}/${event.total})`)
         return
       }
       if (event.phase === 'model-load') {
-        startOrUpdate(formatModelLoadMessage(event))
+        if (event.state === 'ready' || event.state === 'done')
+          return
+        startOrUpdate(formatModelLoadMessage(event, currentFilePath, currentFileIndex, currentFileTotal))
         return
       }
       if (event.phase === 'translate') {
         if (event.totalTexts === 0) {
-          startOrUpdate(`No machine translation needed for ${event.filePath}`)
+          startOrUpdate(`Processing ${event.filePath} · glossary only`)
         }
         else {
-          startOrUpdate(`Translating ${event.filePath}: ${event.completedTexts}/${event.totalTexts} text(s), batch ${event.completedBatches}/${event.totalBatches}`)
+          startOrUpdate(`Processing ${event.filePath} · translating ${event.completedTexts}/${event.totalTexts} texts (batch ${event.completedBatches}/${event.totalBatches})`)
         }
         return
       }
       if (event.phase === 'write') {
-        startOrUpdate(`Writing map for ${event.filePath} (${event.current}/${event.total})`)
+        currentFilePath = event.filePath
+        currentFileIndex = event.current
+        currentFileTotal = event.total
+        startOrUpdate(`Processing ${event.filePath} · saving map`)
       }
     },
     stop(message) {
@@ -164,13 +184,13 @@ function createScanProgressRenderer(): { update: (event: ScanProgressEvent) => v
   }
 }
 
-function formatModelLoadMessage(event: Extract<ScanProgressEvent, { phase: 'model-load' }>): string {
-  if (event.state === 'ready')
-    return `Local model ready: ${event.modelId}`
-
-  const progress = Number.isFinite(event.progress) && event.progress > 0
-    ? ` ${Math.round(event.progress)}%`
-    : ''
-  const file = event.file ? ` (${event.file})` : ''
-  return `Loading local model: ${event.modelId}${progress}${file}`
+function formatModelLoadMessage(
+  event: Extract<ScanProgressEvent, { phase: 'model-load' }>,
+  filePath: string | undefined,
+  currentFileIndex: number,
+  currentFileTotal: number,
+): string {
+  const filePrefix = filePath ? `Processing ${filePath}` : 'Loading local model'
+  const fileProgress = currentFileTotal > 0 ? ` (${currentFileIndex}/${currentFileTotal})` : ''
+  return `${filePrefix}${fileProgress} · loading local model (${event.modelId})`
 }
