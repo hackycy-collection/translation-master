@@ -147,6 +147,37 @@ tmigrate scan ./src --incremental
 tmigrate scan ./src --incremental --clean-deprecated
 ```
 
+### 终端交互流程
+
+`scan` 会按架构阶段持续刷新终端提示，避免本地模型首次加载或下载时看起来像“卡住”：
+
+```text
+Loading .tmigrate config and glossary
+Discovering source files
+Discovered 12 source file(s)
+Scanning src/views/Login.vue (1/12)
+Loading local model: Xenova/opus-mt-zh-en 37% (model.onnx)
+Local model ready: Xenova/opus-mt-zh-en
+Translating src/views/Login.vue: 20/46 text(s), batch 1/3
+Writing map for src/views/Login.vue (1/12)
+Scan finished.
+Scanned 12 file(s), skipped 0, extracted 184 text(s).
+```
+
+各提示对应的内部阶段：
+
+| 终端提示 | 内部模块 | 说明 |
+|----------|----------|------|
+| `Loading .tmigrate config and glossary` | `config.ts` / `glossary.ts` | 读取配置、术语表，并合并命令行参数 |
+| `Discovering source files` | `scanner.ts` | 根据 include/exclude 和目标路径查找待扫描文件 |
+| `Scanning ...` | `Extractor` / `Parser` | 解析当前文件并提取源语言文本 |
+| `Loading local model ...` | `LocalTranslator` / `@translation-master/node` | 本地 ONNX 模型加载或下载进度，展示模型 ID、进度和当前文件 |
+| `Translating ...` | `translator/pipeline.ts` | 展示机器翻译文本数和批次进度；术语表命中的文本不会进入机器翻译 |
+| `Writing map ...` | `mapping.ts` | 合并旧映射、保留人工修改，并写入 `.tmigrate/maps/` |
+| `Scan finished.` | `cli.ts` | 扫描结束，随后打印汇总统计 |
+
+当配置为 `translator: "api"` 且提供 `translatorOptions.endpoint` 时，终端仍会展示扫描、翻译批次和写入进度，但不会出现 `Loading local model ...`。
+
 ### 阶段二：人工确认 + 回写
 
 开发者校对映射文件中的翻译结果（设置 `approved: true` 或修改 `translation`），确认后回写源文件。
@@ -494,9 +525,9 @@ packages/i18n-migrate-cli/
 │   ├── translator/
 │   │   ├── interface.ts         # Translator 抽象接口
 │   │   ├── onnx.ts              # 本地 ONNX 翻译器别名入口
-│   │   ├── local.ts             # 复用 @translation-master/node 的本地翻译器
+│   │   ├── local.ts             # 复用 @translation-master/node 的本地翻译器，透传模型加载进度
 │   │   ├── api.ts               # 外部 API 翻译器适配
-│   │   └── pipeline.ts          # 翻译流水线（批量调度、并发控制、重试）
+│   │   └── pipeline.ts          # 翻译流水线（批量调度、并发控制、重试、进度事件）
 │   ├── replacer.ts              # 源码区间回写器
 │   ├── apply.ts                 # apply / restore 命令编排
 │   ├── backup.ts                # apply 前自动备份 + restore 回滚
@@ -596,11 +627,12 @@ interface TranslateResult {
 
 `pipeline.ts` 的职责：
 
-1. 将待翻译文本按 `batchSize` 分片
-2. 按 `concurrency` 并发调用 Translator
-3. 失败时按 `retries` 重试，超过重试次数的批次标记为失败
-4. 对含插值的文本，先调用 `placeholder.ts` 保护，翻译后再还原
-5. 术语表命中的条目自动设置 `translationSource: "glossary"` 和 `approved: true`
+1. 先匹配术语表，命中的条目自动设置 `translationSource: "glossary"` 和 `approved: true`
+2. 将剩余待机器翻译文本按 `batchSize` 分片
+3. 按 `concurrency` 并发调用 Translator，并通过 `onProgress` 上报批次进度
+4. 失败时按 `retries` 重试，超过重试次数的批次标记为失败
+5. 对含插值的文本，先调用 `placeholder.ts` 保护，翻译后再还原
+6. 本地翻译器通过 `@translation-master/node` 的 `modelLoad` 事件向 CLI 上报模型加载进度
 
 ## 依赖
 

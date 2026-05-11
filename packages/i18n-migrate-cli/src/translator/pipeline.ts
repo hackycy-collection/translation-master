@@ -9,6 +9,14 @@ export interface TranslatePipelineInput {
   config: MigrateConfig
   glossary: Glossary
   translator: Translator
+  onProgress?: (event: TranslatePipelineProgressEvent) => void
+}
+
+export interface TranslatePipelineProgressEvent {
+  completedBatches: number
+  totalBatches: number
+  completedTexts: number
+  totalTexts: number
 }
 
 export async function translateTexts(input: TranslatePipelineInput): Promise<Record<string, TranslateResult>> {
@@ -33,6 +41,15 @@ export async function translateTexts(input: TranslatePipelineInput): Promise<Rec
   }
 
   const batches = chunk(machineTexts, input.config.batchSize)
+  let completedBatches = 0
+  let completedTexts = 0
+  input.onProgress?.({
+    completedBatches,
+    totalBatches: batches.length,
+    completedTexts,
+    totalTexts: machineTexts.length,
+  })
+
   await runConcurrent(batches, input.config.translatorOptions.concurrency, async (batch) => {
     const protectedBatch = batch.map(text => protectPlaceholders(text))
     const translated = await retry(
@@ -59,6 +76,14 @@ export async function translateTexts(input: TranslatePipelineInput): Promise<Rec
         translationSource: 'machine',
         confidence: result.confidence,
       }
+    })
+    completedBatches++
+    completedTexts += batch.length
+    input.onProgress?.({
+      completedBatches,
+      totalBatches: batches.length,
+      completedTexts,
+      totalTexts: machineTexts.length,
     })
   })
 

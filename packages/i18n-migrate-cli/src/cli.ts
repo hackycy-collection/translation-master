@@ -1,7 +1,9 @@
+import type { ScanProgressEvent } from './types'
 import { Command } from 'commander'
 import pc from 'picocolors'
 import { applyTranslations, restoreBackups } from './apply'
 import { initProject } from './init'
+import { createSpinner } from './prompts'
 import { scanProject } from './scanner'
 
 export interface CreateCliOptions {
@@ -35,12 +37,14 @@ export function createCli(options: CreateCliOptions): Command {
     .option('--incremental', 'scan only changed files')
     .option('--clean-deprecated', 'remove deprecated entries from map files')
     .action(async (targetPath: string | undefined, command: { to?: string, incremental?: boolean, cleanDeprecated?: boolean }) => {
-      const result = await scanProject({
+      const progress = createScanProgressRenderer()
+      const result = await scanProjectWithProgress({
         path: targetPath,
         to: command.to,
         incremental: command.incremental,
         cleanDeprecated: command.cleanDeprecated,
-      })
+        onProgress: progress.update,
+      }, progress)
       console.log(pc.green(`Scanned ${result.scannedFiles} file(s), skipped ${result.skippedFiles}, extracted ${result.extractedTexts} text(s).`))
     })
 
@@ -81,4 +85,86 @@ export function createCli(options: CreateCliOptions): Command {
     })
 
   return program
+}
+
+type ScanCommandOptions = Parameters<typeof scanProject>[0]
+
+async function scanProjectWithProgress(options: ScanCommandOptions, progress: { stop: (message: string) => void }) {
+  try {
+    const result = await scanProject(options)
+    progress.stop('Scan finished.')
+    return result
+  }
+  catch (error) {
+    progress.stop('Scan failed.')
+    throw error
+  }
+}
+
+function createScanProgressRenderer(): { update: (event: ScanProgressEvent) => void, stop: (message: string) => void } {
+  const spinner = createSpinner()
+  let started = false
+  let finished = false
+
+  const startOrUpdate = (message: string) => {
+    if (finished)
+      return
+    if (started) {
+      spinner.message(message)
+      return
+    }
+    spinner.start(message)
+    started = true
+  }
+
+  return {
+    update(event) {
+      if (event.phase === 'config') {
+        startOrUpdate(event.message)
+        return
+      }
+      if (event.phase === 'discover') {
+        startOrUpdate(event.message)
+        return
+      }
+      if (event.phase === 'file') {
+        startOrUpdate(`Scanning ${event.filePath} (${event.current}/${event.total})`)
+        return
+      }
+      if (event.phase === 'model-load') {
+        startOrUpdate(formatModelLoadMessage(event))
+        return
+      }
+      if (event.phase === 'translate') {
+        if (event.totalTexts === 0) {
+          startOrUpdate(`No machine translation needed for ${event.filePath}`)
+        }
+        else {
+          startOrUpdate(`Translating ${event.filePath}: ${event.completedTexts}/${event.totalTexts} text(s), batch ${event.completedBatches}/${event.totalBatches}`)
+        }
+        return
+      }
+      if (event.phase === 'write') {
+        startOrUpdate(`Writing map for ${event.filePath} (${event.current}/${event.total})`)
+      }
+    },
+    stop(message) {
+      if (finished)
+        return
+      finished = true
+      if (started)
+        spinner.stop(message)
+    },
+  }
+}
+
+function formatModelLoadMessage(event: Extract<ScanProgressEvent, { phase: 'model-load' }>): string {
+  if (event.state === 'ready')
+    return `Local model ready: ${event.modelId}`
+
+  const progress = Number.isFinite(event.progress) && event.progress > 0
+    ? ` ${Math.round(event.progress)}%`
+    : ''
+  const file = event.file ? ` (${event.file})` : ''
+  return `Loading local model: ${event.modelId}${progress}${file}`
 }

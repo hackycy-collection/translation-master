@@ -1,8 +1,13 @@
+import type { ModelLoadProgress } from '@translation-master/node'
 import type { MigrateConfig, Translator } from '../types'
 import { ApiTranslator } from './api'
 import { LocalTranslator } from './local'
 
-export function createTranslator(config: MigrateConfig): Translator {
+export interface CreateTranslatorOptions {
+  onModelLoadProgress?: (event: ModelLoadProgress) => void
+}
+
+export function createTranslator(config: MigrateConfig, options: CreateTranslatorOptions = {}): Translator {
   if (config.translator === 'api' && config.translatorOptions.endpoint) {
     return new ApiTranslator({
       apiKey: config.translatorOptions.apiKey,
@@ -13,5 +18,6 @@ export function createTranslator(config: MigrateConfig): Translator {
 
   return new LocalTranslator({
     modelBaseUrl: config.translatorOptions.modelBaseUrl,
+    onModelLoadProgress: options.onModelLoadProgress,
   })
 }

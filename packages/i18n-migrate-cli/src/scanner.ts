@@ -14,15 +14,29 @@ import { translateTexts } from './translator/pipeline'
 
 export async function scanProject(options: ScanOptions = {}): Promise<ScanResult> {
   const cwd = options.cwd ?? process.cwd()
+  options.onProgress?.({ phase: 'config', message: 'Loading .tmigrate config and glossary' })
   const config = await loadConfig(cwd, options.to ? { targetLocale: options.to } : {})
   const glossary = await loadGlossary(cwd)
-  const translator = options.translator ?? createTranslator(config)
+  const translator = options.translator ?? createTranslator(config, {
+    onModelLoadProgress(event) {
+      options.onProgress?.({
+        phase: 'model-load',
+        modelId: event.modelId,
+        progress: event.progress,
+        state: event.state,
+        file: event.file,
+      })
+    },
+  })
   const extractor = new Extractor(config)
   const scanMeta = await loadScanMeta(cwd)
+  options.onProgress?.({ phase: 'discover', message: 'Discovering source files' })
   const files = await findSourceFiles(cwd, options.path, config.include, config.exclude)
   const result: ScanResult = { scannedFiles: 0, skippedFiles: 0, extractedTexts: 0, mapFiles: [] }
+  options.onProgress?.({ phase: 'discover', message: `Discovered ${files.length} source file(s)`, totalFiles: files.length })
 
-  for (const sourcePath of files) {
+  for (const [index, sourcePath] of files.entries()) {
+    options.onProgress?.({ phase: 'file', filePath: sourcePath, current: index + 1, total: files.length })
     const absolutePath = path.join(cwd, sourcePath)
     const hash = await hashFile(absolutePath)
     const previousMeta = scanMeta[sourcePath]
@@ -48,6 +62,9 @@ export async function scanProject(options: ScanOptions = {}): Promise<ScanResult
       config,
       glossary,
       translator,
+      onProgress(event) {
+        options.onProgress?.({ phase: 'translate', filePath: sourcePath, ...event })
+      },
     })
     const nextEntries: Record<string, TranslationEntry> = {}
 
@@ -71,12 +88,14 @@ export async function scanProject(options: ScanOptions = {}): Promise<ScanResult
       mapFile: sourcePathToMapPath(sourcePath).replace('.tmigrate/maps/', ''),
     }
 
+    options.onProgress?.({ phase: 'write', filePath: sourcePath, current: index + 1, total: files.length })
     result.scannedFiles++
     result.extractedTexts += segments.length
     result.mapFiles.push(mapFile)
   }
 
   await saveScanMeta(cwd, scanMeta)
+  options.onProgress?.({ phase: 'done', result })
   return result
 }
 

@@ -135,6 +135,7 @@ export interface ScanOptions {
   incremental?: boolean
   cleanDeprecated?: boolean
   translator?: Translator
+  onProgress?: (event: ScanProgressEvent) => void
 }
 
 export interface ScanResult {
@@ -143,6 +144,15 @@ export interface ScanResult {
   extractedTexts: number
   mapFiles: string[]
 }
+
+export type ScanProgressEvent
+  = | { phase: 'config', message: string }
+    | { phase: 'discover', message: string, totalFiles?: number }
+    | { phase: 'file', filePath: string, current: number, total: number }
+    | { phase: 'model-load', modelId: string, progress: number, state: string, file?: string }
+    | { phase: 'translate', filePath: string, completedBatches: number, totalBatches: number, completedTexts: number, totalTexts: number }
+    | { phase: 'write', filePath: string, current: number, total: number }
+    | { phase: 'done', result: ScanResult }
 
 export interface ApplyOptions {
   cwd?: string
