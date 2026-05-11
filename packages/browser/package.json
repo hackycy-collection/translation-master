@@ -5,12 +5,12 @@
   "description": "Browser translation library with DOM support, powered by Transformers.js",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
-  "homepage": "https://github.com/hackycy-collection/translation-master#readme",
+  "homepage": "https://github.com/hackycy/translation-master#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hackycy-collection/translation-master.git"
+    "url": "git+https://github.com/hackycy/translation-master.git"
   },
-  "bugs": "https://github.com/hackycy-collection/translation-master/issues",
+  "bugs": "https://github.com/hackycy/translation-master/issues",
   "keywords": [],
   "sideEffects": false,
   "exports": {
