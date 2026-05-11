@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { applyTranslations, approveTranslations, initProject, restoreBackups, scanProject } from '../index'
+import { collectMapStats, formatMapStatsReport } from '../stats'
 
 const tempDirs: string[] = []
 
@@ -150,6 +151,46 @@ describe('i18n migrate workflow', () => {
     expect(overriddenAppMap.entries['跳过此项']?.approved).toBe(true)
     expect(overriddenAppMap.entries['空译文']?.approved).toBe(true)
     expect(overriddenAppMap.entries['旧文案']?.approved).toBe(true)
+  })
+
+  it('summarizes map progress and flags orphaned files', async () => {
+    const cwd = await createTempProject()
+    const appPath = path.join(cwd, 'src', 'App.vue')
+    const orphanPath = path.join(cwd, 'src', 'Legacy.vue')
+    await mkdir(path.dirname(appPath), { recursive: true })
+    await writeFile(appPath, '<template><button>提交</button><p>请输入用户名</p><p>跳过此项</p><p>旧文案</p></template>\n', 'utf8')
+    await writeFile(orphanPath, '<template><p>遗留文案</p></template>\n', 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await writeFile(path.join(cwd, '.tmigrate', 'glossary.json'), JSON.stringify({ 提交: 'Submit' }, null, 2), 'utf8')
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+
+    await import('node:fs/promises').then(fs => fs.unlink(orphanPath))
+
+    const appMapPath = path.join(cwd, '.tmigrate', 'maps', 'src', 'App.vue.json')
+    const appMap = JSON.parse(await readFile(appMapPath, 'utf8')) as {
+      entries: Record<string, { approved: boolean, translation: string, skip?: boolean, deprecated?: boolean }>
+    }
+    appMap.entries['跳过此项']!.skip = true
+    appMap.entries['旧文案']!.deprecated = true
+    await writeFile(appMapPath, JSON.stringify(appMap, null, 2), 'utf8')
+
+    const report = await collectMapStats({ cwd })
+    const output = formatMapStatsReport(report)
+
+    expect(report.discoveredMapFiles).toBe(2)
+    expect(report.validMapFiles).toBe(2)
+    expect(report.current.mapFiles).toBe(1)
+    expect(report.orphaned.mapFiles).toBe(1)
+    expect(report.current.readyToApplyEntries).toBe(1)
+    expect(report.current.pendingReviewEntries).toBe(1)
+    expect(report.current.skippedEntries).toBe(1)
+    expect(report.current.deprecatedEntries).toBe(1)
+    expect(report.orphaned.pendingReviewEntries).toBe(1)
+    expect(output).toContain('当前工作集')
+    expect(output).toContain('孤儿 map')
+    expect(output).toContain('待人工校对')
+    expect(output).toContain('tmigrate stats')
   })
 })
 

@@ -1,10 +1,10 @@
 import type { ApproveOptions, ApproveResult, TranslationEntry } from './types'
 import path from 'node:path'
 import process from 'node:process'
-import { glob } from 'tinyglobby'
 import { readJsonFile, writeJsonFile } from './fs-utils'
+import { findMapPaths } from './map-paths'
 import { createMapFile } from './mapping'
-import { mapPathToSourcePath, sourcePathToMapPath, toPosixPath } from './paths'
+import { mapPathToSourcePath } from './paths'
 
 export async function approveTranslations(options: ApproveOptions = {}): Promise<ApproveResult> {
   const cwd = options.cwd ?? process.cwd()
@@ -66,25 +66,6 @@ export async function approveTranslations(options: ApproveOptions = {}): Promise
 
   options.onProgress?.({ phase: 'done', message: 'Approve finished' })
   return { files, dryRun: options.dryRun === true }
-}
-
-async function findMapPaths(cwd: string, targetPath?: string): Promise<string[]> {
-  const mapPaths = await glob('.tmigrate/maps/**/*.json', {
-    cwd,
-    absolute: false,
-    onlyFiles: true,
-  })
-  const normalizedTarget = targetPath ? toPosixPath(targetPath).replace(/\/$/, '') : undefined
-  return mapPaths
-    .filter((mapPath) => {
-      if (!normalizedTarget)
-        return true
-      const sourcePath = mapPathToSourcePath(mapPath)
-      return sourcePath === normalizedTarget
-        || sourcePath.startsWith(`${normalizedTarget}/`)
-        || sourcePathToMapPath(sourcePath).startsWith(sourcePathToMapPath(normalizedTarget).replace(/\.json$/, '/'))
-    })
-    .sort()
 }
 
 function isApprovableEntry(entry: TranslationEntry, options: ApproveOptions): boolean {

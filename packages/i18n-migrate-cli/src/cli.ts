@@ -7,6 +7,7 @@ import { approveTranslations } from './approve'
 import { initProject } from './init'
 import { createSpinner } from './prompts'
 import { scanProject } from './scanner'
+import { collectMapStats, formatMapStatsReport } from './stats'
 
 export interface CreateCliOptions {
   version: string
@@ -86,6 +87,14 @@ export function createCli(options: CreateCliOptions): Command {
       console.log(pc.green(`${result.dryRun ? 'Would approve' : 'Approved'} ${approved} entries in ${changed} map file(s).`))
       if (skipped > 0)
         console.log(pc.dim(`Skipped ${skipped} entries (skip/deprecated/empty translation).`))
+    })
+
+  program
+    .command('stats [path]')
+    .description('Summarize map files and translation progress.')
+    .action(async (targetPath: string | undefined) => {
+      const report = await collectMapStats({ path: targetPath })
+      console.log(formatMapStatsReport(report))
     })
 
   program

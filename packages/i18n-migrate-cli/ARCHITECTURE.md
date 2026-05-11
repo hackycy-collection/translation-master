@@ -210,6 +210,31 @@ tmigrate apply
 
 这个策略避免了 `const title = '账号安全'` 回写为 `const title = 'Account's secure.'` 这类编译错误，也覆盖了 HTML、JSON、CSS、YAML 中译文特殊字符造成的结构破坏。
 
+### 阶段三：统计与盘点
+
+`stats` 命令只读取 `.tmigrate/maps/`，不修改任何文件，用来快速判断迁移进度和清理优先级。
+
+```bash
+tmigrate stats
+tmigrate stats src/views/Login.vue
+tmigrate stats src/modules/order
+```
+
+统计口径分成两层：
+
+1. **当前工作集**：源码仍存在的 map 文件，统计可回写、待校对、待补译、已跳过、已废弃条目。
+2. **孤儿/异常**：源码已不存在的 map 文件，以及损坏无法解析的 map 文件。
+
+这样可以直接看出：
+
+- 现在已经能回写多少
+- 还差多少人工校对
+- 还有多少文本没有翻完
+- 有没有历史废弃条目需要清理
+- 有没有残留的孤儿 map 需要删除
+
+注意这里统计的是 **map 条目数**，不是源码里重复出现的文本命中次数。因为同一个原文在同一文件里通常只保留一个条目，统计命中次数会误导进度判断。
+
 ### 回滚
 
 `apply` 执行时自动将原文件备份到 `.tmigrate/backups/`，保留目录结构。`restore` 命令从备份恢复，不依赖 source map 反向推导。

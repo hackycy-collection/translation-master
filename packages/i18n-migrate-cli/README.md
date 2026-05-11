@@ -28,6 +28,9 @@ pnpm exec tmigrate scan src --to en
 # 3. 校对 .tmigrate/maps 下的翻译条目，再批量标记为 approved: true
 pnpm exec tmigrate approve
 
+# 3.5. 先统计当前进度，看看还差什么
+pnpm exec tmigrate stats
+
 # 4. 预览回写 diff
 pnpm exec tmigrate apply --dry-run
 
@@ -161,6 +164,27 @@ tmigrate approve
 | `--allow-empty` | 也批准空译文条目 |
 
 执行时会显示阶段式进度提示：准备中、扫描 map 文件、逐个处理条目、写入结果。
+
+### `stats`
+
+统计 `.tmigrate/maps/` 的翻译进度，帮助快速看出当前做了什么、还需要做什么。
+
+```bash
+tmigrate stats
+tmigrate stats src/views/Login.vue
+tmigrate stats src/modules/order
+```
+
+常见输出会分成这些部分：
+
+- 当前可回写的条目
+- 待人工校对的条目
+- 还没有译文的条目
+- 已跳过和已废弃的条目
+- glossary / machine / manual 的来源分布
+- 孤儿 map 文件和损坏 map 文件
+
+说明：统计口径是 map 条目数，不是源码中的文本出现次数。
 
 ### `restore`
 

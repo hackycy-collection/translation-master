@@ -7,6 +7,7 @@ export { DEFAULT_CONFIG, defineConfig, loadConfig } from './config'
 export { Extractor } from './extractor'
 export { composeGlossaryTranslation, enforceGlossaryTerms, loadGlossary, matchGlossary } from './glossary'
 export { initProject } from './init'
+export { findMapPaths } from './map-paths'
 export { createEntry, createMapFile, mergeMapEntries, readMapFile, writeMapFile } from './mapping'
 export { CompositeParser, createDefaultParser } from './parsers/parser'
 export { mapPathToSourcePath, sourcePathToMapPath, toPosixPath } from './paths'
@@ -14,6 +15,7 @@ export { confirmOverwriteTmigrate, createSpinner, promptInitConfig } from './pro
 export { Replacer } from './replacer'
 export { createUnifiedDiff } from './reporter'
 export { scanProject } from './scanner'
+export { collectMapStats, formatMapStatsReport } from './stats'
 export { createTranslator } from './translator'
 export { ApiTranslator } from './translator/api'
 export type { TranslateOptions as CliTranslateOptions, TranslateResult as CliTranslateResult, Translator as CliTranslator } from './translator/interface'
@@ -33,6 +35,10 @@ export type {
   FilterRule,
   Location,
   MapFile,
+  MapStatsBucket,
+  MapStatsFile,
+  MapStatsInvalidFile,
+  MapStatsReport,
   MigrateConfig,
   RestoreOptions,
   RestoreResult,

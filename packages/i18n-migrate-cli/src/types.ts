@@ -210,6 +210,45 @@ export interface RestoreResult {
   available: BackupMetaEntry[]
 }
 
+export interface MapStatsBucket {
+  mapFiles: number
+  entries: number
+  readyToApplyEntries: number
+  pendingReviewEntries: number
+  untranslatedEntries: number
+  skippedEntries: number
+  deprecatedEntries: number
+  translationSourceCounts: Record<TranslationSource, number>
+}
+
+export interface MapStatsFile {
+  sourcePath: string
+  mapPath: string
+  sourceExists: boolean
+  totalEntries: number
+  readyToApplyEntries: number
+  pendingReviewEntries: number
+  untranslatedEntries: number
+  skippedEntries: number
+  deprecatedEntries: number
+  translationSourceCounts: Record<TranslationSource, number>
+}
+
+export interface MapStatsInvalidFile {
+  mapPath: string
+  sourcePath: string
+  error: string
+}
+
+export interface MapStatsReport {
+  discoveredMapFiles: number
+  validMapFiles: number
+  current: MapStatsBucket
+  orphaned: MapStatsBucket
+  invalidFiles: MapStatsInvalidFile[]
+  files: MapStatsFile[]
+}
+
 export type WorkflowProgressEvent
   = | { phase: 'prepare', message: string }
     | { phase: 'discover', message: string, total?: number }
