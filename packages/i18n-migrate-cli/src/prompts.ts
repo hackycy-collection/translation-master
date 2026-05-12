@@ -186,8 +186,9 @@ async function promptTranslatorOptions(
     })
     assertPromptValue(modelBaseUrl)
 
-    return typeof modelBaseUrl === 'string' && modelBaseUrl.trim()
-      ? { modelBaseUrl: modelBaseUrl.trim() }
+    const normalizedModelBaseUrl = normalizePromptText(modelBaseUrl)
+    return normalizedModelBaseUrl
+      ? { modelBaseUrl: normalizedModelBaseUrl }
       : undefined
   }
 
@@ -207,8 +208,8 @@ async function promptTranslatorOptions(
     assertPromptValue(apiKey)
 
     return {
-      endpoint: endpoint.trim(),
-      apiKey: apiKey.trim(),
+      endpoint: normalizePromptText(endpoint),
+      apiKey: normalizePromptText(apiKey),
     }
   }
 
@@ -230,6 +231,7 @@ async function promptTranslatorOptions(
     placeholder: 'Leave empty to resolve from the selected channel',
   })
   assertPromptValue(chromeBrowserBuildId)
+  const normalizedChromeBrowserBuildId = normalizePromptText(chromeBrowserBuildId)
 
   const chromeBrowserCacheDir = await text({
     message: 'Chrome cache dir',
@@ -237,6 +239,7 @@ async function promptTranslatorOptions(
     placeholder: '.tmigrate/chrome',
   })
   assertPromptValue(chromeBrowserCacheDir)
+  const normalizedChromeBrowserCacheDir = normalizePromptText(chromeBrowserCacheDir)
 
   const chromeBrowserVisible = await confirm({
     message: 'Show Chrome window',
@@ -246,8 +249,12 @@ async function promptTranslatorOptions(
 
   return {
     chromeBrowserChannel,
-    chromeBrowserBuildId: chromeBrowserBuildId.trim(),
-    chromeBrowserCacheDir: chromeBrowserCacheDir.trim() || '.tmigrate/chrome',
+    chromeBrowserBuildId: normalizedChromeBrowserBuildId,
+    chromeBrowserCacheDir: normalizedChromeBrowserCacheDir || '.tmigrate/chrome',
     chromeBrowserVisible: chromeBrowserVisible === true,
   }
+}
+
+function normalizePromptText(value: string | symbol | undefined): string {
+  return typeof value === 'string' ? value.trim() : ''
 }
