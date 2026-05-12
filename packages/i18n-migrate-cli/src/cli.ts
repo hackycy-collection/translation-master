@@ -403,20 +403,20 @@ function formatModelLoadMessage(
 ): string {
   if (event.state === 'browser-resolve') {
     return event.cacheDir
-      ? `Preparing managed Chrome · cache ${event.cacheDir}`
-      : 'Preparing managed Chrome'
+      ? `Checking Chrome for Testing cache · ${event.cacheDir}`
+      : 'Checking Chrome for Testing cache'
   }
   if (event.state === 'browser-download')
-    return `Downloading managed Chrome ${event.progress}%${event.cacheDir ? ` · cache ${event.cacheDir}` : ''}`
+    return `Downloading Chrome for Testing ${event.progress}%${event.cacheDir ? ` · cache ${event.cacheDir}` : ''}`
   if (event.state === 'browser-ready') {
     return event.executablePath
-      ? `Using managed Chrome at ${event.executablePath}`
-      : 'Managed Chrome is ready'
+      ? `Chrome for Testing ready at ${event.executablePath}`
+      : 'Chrome for Testing is ready'
   }
 
   const filePrefix = filePath ? `Processing ${filePath}` : 'Loading local model'
   const fileProgress = currentFileTotal > 0 ? ` (${currentFileIndex}/${currentFileTotal})` : ''
-  const label = event.modelId === 'chrome-translator' ? 'Chrome Translator model' : 'local model'
+  const label = event.modelId === 'chrome-translator' ? 'Chrome Translator runtime' : 'local model'
   const progress = event.progress > 0 ? ` ${event.progress}%` : ''
   return `${filePrefix}${fileProgress} · loading ${label}${progress}`
 }

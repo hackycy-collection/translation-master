@@ -66,11 +66,11 @@ export class ChromeTranslator implements Translator {
     if (!page)
       throw new Error('Chrome translator page was not initialized.')
 
-    const needsActivation = await this.prepareTranslator(page, options.sourceLocale, options.targetLocale, this.options.timeout ?? 30000)
+    const needsActivation = await this.prepareTranslator(page, options.sourceLocale, options.targetLocale)
     if (needsActivation) {
       await page.click('#activate')
     }
-    await this.waitForTranslatorReady(page, options.sourceLocale, options.targetLocale, this.options.timeout ?? 30000)
+    await this.waitForTranslatorReady(page, options.sourceLocale, options.targetLocale)
   }
 
   async translate(texts: string[], options: TranslateOptions): Promise<TranslateResult[]> {
@@ -82,12 +82,12 @@ export class ChromeTranslator implements Translator {
 
       let translations: string[]
       try {
-        const needsActivation = await this.prepareTranslator(page, options.sourceLocale, options.targetLocale, this.options.timeout ?? 30000)
+        const needsActivation = await this.prepareTranslator(page, options.sourceLocale, options.targetLocale)
 
         if (needsActivation)
           await page.click('#activate')
 
-        await this.waitForTranslatorReady(page, options.sourceLocale, options.targetLocale, this.options.timeout ?? 30000)
+        await this.waitForTranslatorReady(page, options.sourceLocale, options.targetLocale)
         translations = await this.translatePreparedTexts(page, texts, options.sourceLocale, options.targetLocale, this.options.timeout ?? 30000)
       }
       catch (error) {
@@ -154,8 +154,8 @@ export class ChromeTranslator implements Translator {
     }
   }
 
-  private async prepareTranslator(page: Page, sourceLocale: string, targetLocale: string, timeout: number): Promise<boolean> {
-    return page.evaluate(({ sourceLocale, targetLocale, timeout }) => {
+  private async prepareTranslator(page: Page, sourceLocale: string, targetLocale: string): Promise<boolean> {
+    return page.evaluate(({ sourceLocale, targetLocale }) => {
       const api = globalThis as typeof globalThis & {
         Translator?: {
           availability: (options: { sourceLanguage: string, targetLanguage: string }) => Promise<string>
@@ -166,7 +166,6 @@ export class ChromeTranslator implements Translator {
         __tmigratePrepareTranslator?: (options: {
           sourceLanguage: string
           targetLanguage: string
-          timeout: number
         }) => Promise<boolean>
       }
 
@@ -184,16 +183,15 @@ export class ChromeTranslator implements Translator {
         return false
       if (!api.__tmigratePrepareTranslator)
         throw new Error('Chrome translator bridge is not initialized.')
-      return api.__tmigratePrepareTranslator({ ...createOptions, timeout })
+      return api.__tmigratePrepareTranslator(createOptions)
     }, {
       sourceLocale,
       targetLocale,
-      timeout,
     })
   }
 
-  private async waitForTranslatorReady(page: Page, sourceLocale: string, targetLocale: string, timeout: number): Promise<void> {
-    await page.evaluate(async ({ sourceLocale, targetLocale, timeout }) => {
+  private async waitForTranslatorReady(page: Page, sourceLocale: string, targetLocale: string): Promise<void> {
+    await page.evaluate(async ({ sourceLocale, targetLocale }) => {
       const api = globalThis as typeof globalThis & {
         Translator?: {
           availability: (options: { sourceLanguage: string, targetLanguage: string }) => Promise<string>
@@ -221,12 +219,7 @@ export class ChromeTranslator implements Translator {
       if (api.__tmigrateTranslator?.key !== key) {
         if (!api.__tmigrateTranslatorReady)
           throw new Error('Chrome translator was not activated.')
-        await Promise.race([
-          api.__tmigrateTranslatorReady,
-          new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error(`Chrome Translator.create timed out after ${timeout}ms`)), timeout)
-          }),
-        ])
+        await api.__tmigrateTranslatorReady
       }
 
       if (api.__tmigrateTranslator?.key !== key)
@@ -234,7 +227,6 @@ export class ChromeTranslator implements Translator {
     }, {
       sourceLocale,
       targetLocale,
-      timeout,
     })
   }
 
@@ -468,22 +460,17 @@ function bridgeHtml(): string {
         if (api.__tmigrateTranslator && api.__tmigrateTranslator.translator.destroy)
           api.__tmigrateTranslator.translator.destroy();
 
-        const translator = await Promise.race([
-          api.Translator.create({
-            sourceLanguage: pending.sourceLanguage,
-            targetLanguage: pending.targetLanguage,
-            monitor(monitor) {
-              monitor.addEventListener('downloadprogress', (event) => {
-                const total = event.total || 0;
-                const progress = total > 0 ? Math.round(((event.loaded || 0) / total) * 100) : 0;
-                api.__tmigrateReportDownload && api.__tmigrateReportDownload({ progress, state: 'download' });
-              });
-            },
-          }),
-          new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Chrome Translator.create timed out after ' + pending.timeout + 'ms')), pending.timeout);
-          }),
-        ]);
+        const translator = await api.Translator.create({
+          sourceLanguage: pending.sourceLanguage,
+          targetLanguage: pending.targetLanguage,
+          monitor(monitor) {
+            monitor.addEventListener('downloadprogress', (event) => {
+              const total = event.total || 0;
+              const progress = total > 0 ? Math.round(((event.loaded || 0) / total) * 100) : 0;
+              api.__tmigrateReportDownload && api.__tmigrateReportDownload({ progress, state: 'download' });
+            });
+          },
+        });
 
         api.__tmigrateTranslator = { key, translator };
         api.__tmigratePendingTranslator = null;
