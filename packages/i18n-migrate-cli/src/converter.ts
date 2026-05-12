@@ -50,6 +50,17 @@ export async function convertMaps(options: ConvertOptions = {}): Promise<Convert
     ? options.translator ?? createTranslator(config)
     : undefined
 
+  if (translator && config.translator === 'chrome') {
+    const chromeTranslator = translator as { preflight?: (options: { sourceLocale: string, targetLocale: string }) => Promise<void> }
+    if (typeof chromeTranslator.preflight === 'function') {
+      options.onProgress?.({ phase: 'prepare', message: 'Checking managed Chrome availability' })
+      await chromeTranslator.preflight({
+        sourceLocale: translationConfig.sourceLocale,
+        targetLocale: translationConfig.targetLocale,
+      })
+    }
+  }
+
   options.onProgress?.({ phase: 'discover', message: `Found ${mapPaths.length} map file(s)`, total: mapPaths.length })
 
   try {

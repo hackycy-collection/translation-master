@@ -2,7 +2,7 @@
 
 Chrome built-in Translator API adapter for `translation-master`.
 
-This package launches a desktop Chrome / Chromium instance through `playwright-core`, opens a small bridge page, and delegates translation work to the browser's built-in `Translator` API.
+This package downloads and reuses a managed Chrome for Testing build, launches it through `playwright-core`, opens a small bridge page, and delegates translation work to the browser's built-in `Translator` API.
 
 ## Install
 
@@ -16,8 +16,9 @@ pnpm add @translation-master/chrome
 import { ChromeTranslator } from '@translation-master/chrome'
 
 const translator = new ChromeTranslator({
-  channel: 'chrome',
-  headless: false,
+  onDownloadProgress(event) {
+    console.log(event.state, event.progress, event.executablePath ?? event.cacheDir ?? '')
+  },
 })
 
 const results = await translator.translate(['提交'], {
@@ -31,6 +32,7 @@ await translator.dispose()
 
 ## Notes
 
-- Requires a desktop Chrome build with the built-in Translator API available.
+- Downloads Chrome for Testing into `.tmigrate/chrome` in the current project on first use and reuses it on later runs.
+- Emits the cache directory and executable path through `onDownloadProgress` so users can inspect or delete the managed browser.
 - Uses a real page click to initialize the translator because browser implementations may require user activation.
 - Requests are serialized internally to reuse one browser page and one language-pair translator safely.

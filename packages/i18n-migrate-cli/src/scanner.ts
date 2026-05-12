@@ -25,9 +25,12 @@ export async function scanProject(options: ScanOptions = {}): Promise<ScanResult
         progress: event.progress,
         state: event.state,
         file: event.file,
+        cacheDir: event.cacheDir,
+        executablePath: event.executablePath,
       })
     },
   })
+  await preflightTranslator(translator, config, options.onProgress)
   const extractor = new Extractor(config)
   const scanMeta = await loadScanMeta(cwd)
   options.onProgress?.({ phase: 'discover', message: 'Discovering source files' })
@@ -103,6 +106,24 @@ export async function scanProject(options: ScanOptions = {}): Promise<ScanResult
   await saveScanMeta(cwd, scanMeta)
   options.onProgress?.({ phase: 'done', result })
   return result
+}
+
+async function preflightTranslator(
+  translator: ReturnType<typeof createTranslator>,
+  config: Awaited<ReturnType<typeof loadConfig>>,
+  onProgress: ScanOptions['onProgress'],
+): Promise<void> {
+  if (config.translator !== 'chrome')
+    return
+  const chromeTranslator = translator as { preflight?: (options: { sourceLocale: string, targetLocale: string }) => Promise<void> }
+  if (typeof chromeTranslator.preflight !== 'function')
+    return
+
+  onProgress?.({ phase: 'config', message: 'Checking managed Chrome availability' })
+  await chromeTranslator.preflight({
+    sourceLocale: config.sourceLocale,
+    targetLocale: config.targetLocale,
+  })
 }
 
 async function findSourceFiles(cwd: string, targetPath: string | undefined, include: string[], exclude: string[]): Promise<string[]> {

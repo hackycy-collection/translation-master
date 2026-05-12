@@ -28,8 +28,9 @@ describe('init prompts', () => {
       ['vue', 'ts'],
       'src',
       'chrome',
-      'chrome-canary',
-      '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
+      'stable',
+      '',
+      '.tmigrate/chrome',
     )
 
     const { promptInitConfig } = await import('../prompts')
@@ -41,9 +42,9 @@ describe('init prompts', () => {
       include: ['src/**/*.{vue,ts}'],
       translator: 'chrome',
       translatorOptions: {
-        chromeChannel: 'chrome-canary',
-        chromeExecutablePath: '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-        chromeHeadless: false,
+        chromeBrowserChannel: 'stable',
+        chromeBrowserBuildId: '',
+        chromeBrowserCacheDir: '.tmigrate/chrome',
       },
     })
   })

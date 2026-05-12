@@ -64,7 +64,7 @@ pnpm exec tmigrate restore
 |---|---|
 | `local` | 本地 ONNX 模型，默认方案 |
 | `api` | HTTP 远程翻译服务 |
-| `chrome` | 通过 `@translation-master/chrome` 调用 Chromium / Chrome 的内置 Translator API，适合桌面 Chrome 环境 |
+| `chrome` | 通过 `@translation-master/chrome` 下载并复用受管理的 Chrome for Testing，再调用内置 Translator API |
 
 ## 命令
 
@@ -155,21 +155,21 @@ tmigrate apply
 
 #### `chrome` 后端配置
 
-`chrome` 后端依赖独立包 `@translation-master/chrome`、桌面 Chrome 和 `playwright-core`，适合在本地机器上借助浏览器内置翻译能力提升质量。
+`chrome` 后端依赖独立包 `@translation-master/chrome`。首次使用时会自动下载一份受管理的 Chrome for Testing 到 `.tmigrate/chrome`，之后复用本地缓存，不读取用户机器上已有的 Chrome 配置。
 
 ```bash
 pnpm add -D @translation-master/chrome
 ```
 
+扫描时会在终端提示受管理浏览器的缓存目录和可执行文件路径，便于追溯。CLI 不会自动删除这份浏览器缓存；如果需要释放空间，可按提示路径手动删除缓存目录。
+
 相关配置项位于 `.tmigrate/config.json` 的 `translatorOptions`：
 
 | 选项 | 说明 |
 |---|---|
-| `chromeChannel` | 浏览器渠道名，默认 `chrome` |
-| `chromeExecutablePath` | 指定 Chrome 可执行文件路径 |
-| `chromeHeadless` | 是否无头运行，默认 `false` |
-| `chromeUserDataDir` | 用户数据目录，默认临时目录 |
-| `chromeKeepAlive` | 扫描结束后是否保留浏览器进程，默认 `false` |
+| `chromeBrowserCacheDir` | 可选：覆盖受管理 Chrome 的缓存目录。默认使用项目目录下的 `.tmigrate/chrome` |
+| `chromeBrowserChannel` | 可选：Chrome 通道，默认 `stable`，可选 `beta`、`dev`、`canary` |
+| `chromeBrowserBuildId` | 可选：精确指定 Chrome build ID，留空则按通道解析 |
 
 执行时会显示阶段式进度提示：准备中、扫描可回写文件、逐个处理文件、写入源文件。
 

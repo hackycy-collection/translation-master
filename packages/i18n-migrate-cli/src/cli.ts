@@ -303,7 +303,7 @@ function createScanProgressRenderer(): { update: (event: ScanProgressEvent) => v
       if (event.phase === 'model-load') {
         if (event.state === 'ready' || event.state === 'done')
           return
-        startOrUpdate(formatModelLoadMessage(currentFilePath, currentFileIndex, currentFileTotal))
+        startOrUpdate(formatModelLoadMessage(event, currentFilePath, currentFileIndex, currentFileTotal))
         return
       }
       if (event.phase === 'translate') {
@@ -396,13 +396,29 @@ function actionLabel(action: 'approve' | 'apply' | 'restore' | 'convert'): strin
 }
 
 function formatModelLoadMessage(
+  event: Extract<ScanProgressEvent, { phase: 'model-load' }>,
   filePath: string | undefined,
   currentFileIndex: number,
   currentFileTotal: number,
 ): string {
+  if (event.state === 'browser-resolve') {
+    return event.cacheDir
+      ? `Preparing managed Chrome · cache ${event.cacheDir}`
+      : 'Preparing managed Chrome'
+  }
+  if (event.state === 'browser-download')
+    return `Downloading managed Chrome ${event.progress}%${event.cacheDir ? ` · cache ${event.cacheDir}` : ''}`
+  if (event.state === 'browser-ready') {
+    return event.executablePath
+      ? `Using managed Chrome at ${event.executablePath}`
+      : 'Managed Chrome is ready'
+  }
+
   const filePrefix = filePath ? `Processing ${filePath}` : 'Loading local model'
   const fileProgress = currentFileTotal > 0 ? ` (${currentFileIndex}/${currentFileTotal})` : ''
-  return `${filePrefix}${fileProgress} · loading local model`
+  const label = event.modelId === 'chrome-translator' ? 'Chrome Translator model' : 'local model'
+  const progress = event.progress > 0 ? ` ${event.progress}%` : ''
+  return `${filePrefix}${fileProgress} · loading ${label}${progress}`
 }
 
 function pathRelativeToCwd(filePath: string): string {

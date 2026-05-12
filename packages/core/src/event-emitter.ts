@@ -3,8 +3,10 @@ export type EventName = 'modelLoad' | 'translate' | 'error' | 'domTranslate'
 export interface ModelLoadEvent {
   modelId: string
   progress: number
-  state: 'initiate' | 'download' | 'progress' | 'done' | 'ready'
+  state: 'initiate' | 'download' | 'progress' | 'done' | 'ready' | 'browser-resolve' | 'browser-download' | 'browser-ready'
   file?: string
+  cacheDir?: string
+  executablePath?: string
 }
 
 export interface TranslateEvent {

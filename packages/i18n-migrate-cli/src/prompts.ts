@@ -212,28 +212,35 @@ async function promptTranslatorOptions(
     }
   }
 
-  const chromeChannel = await select({
-    message: 'Chrome channel',
-    initialValue: defaults.translatorOptions?.chromeChannel ?? 'chrome',
+  const chromeBrowserChannel = await select({
+    message: 'Managed Chrome channel',
+    initialValue: defaults.translatorOptions?.chromeBrowserChannel ?? 'stable',
     options: [
-      { value: 'chrome', label: 'Stable Chrome' },
-      { value: 'chrome-beta', label: 'Chrome Beta' },
-      { value: 'chrome-dev', label: 'Chrome Dev' },
-      { value: 'chrome-canary', label: 'Chrome Canary' },
+      { value: 'stable', label: 'Stable' },
+      { value: 'beta', label: 'Beta' },
+      { value: 'dev', label: 'Dev' },
+      { value: 'canary', label: 'Canary' },
     ],
   })
-  assertPromptValue(chromeChannel)
+  assertPromptValue(chromeBrowserChannel)
 
-  const chromeExecutablePath = await text({
-    message: 'Chrome executable path',
-    initialValue: defaults.translatorOptions?.chromeExecutablePath ?? '',
-    placeholder: 'Leave empty to use the selected Chrome channel',
+  const chromeBrowserBuildId = await text({
+    message: 'Chrome build ID',
+    initialValue: defaults.translatorOptions?.chromeBrowserBuildId ?? '',
+    placeholder: 'Leave empty to resolve from the selected channel',
   })
-  assertPromptValue(chromeExecutablePath)
+  assertPromptValue(chromeBrowserBuildId)
+
+  const chromeBrowserCacheDir = await text({
+    message: 'Chrome cache dir',
+    initialValue: defaults.translatorOptions?.chromeBrowserCacheDir ?? '.tmigrate/chrome',
+    placeholder: '.tmigrate/chrome',
+  })
+  assertPromptValue(chromeBrowserCacheDir)
 
   return {
-    chromeChannel,
-    chromeExecutablePath: chromeExecutablePath.trim(),
-    chromeHeadless: false,
+    chromeBrowserChannel,
+    chromeBrowserBuildId: chromeBrowserBuildId.trim(),
+    chromeBrowserCacheDir: chromeBrowserCacheDir.trim() || '.tmigrate/chrome',
   }
 }

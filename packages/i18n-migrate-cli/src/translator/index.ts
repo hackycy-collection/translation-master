@@ -1,27 +1,35 @@
-import type { ModelLoadProgress } from '@translation-master/node'
 import type { MigrateConfig, Translator } from '../types'
 import { ApiTranslator } from './api'
 import { LocalTranslator } from './local'
 
+export interface TranslatorLoadProgress {
+  modelId: string
+  progress: number
+  state: 'initiate' | 'download' | 'progress' | 'done' | 'ready' | 'browser-resolve' | 'browser-download' | 'browser-ready'
+  file?: string
+  cacheDir?: string
+  executablePath?: string
+}
+
 export interface CreateTranslatorOptions {
-  onModelLoadProgress?: (event: ModelLoadProgress) => void
+  onModelLoadProgress?: (event: TranslatorLoadProgress) => void
 }
 
 export function createTranslator(config: MigrateConfig, options: CreateTranslatorOptions = {}): Translator {
   if (config.translator === 'chrome') {
     return new LazyChromeTranslator({
-      channel: config.translatorOptions.chromeChannel,
-      executablePath: config.translatorOptions.chromeExecutablePath,
-      headless: config.translatorOptions.chromeHeadless,
-      userDataDir: config.translatorOptions.chromeUserDataDir,
-      keepAlive: config.translatorOptions.chromeKeepAlive,
+      browserCacheDir: config.translatorOptions.chromeBrowserCacheDir,
+      browserChannel: config.translatorOptions.chromeBrowserChannel,
+      browserBuildId: config.translatorOptions.chromeBrowserBuildId,
       timeout: config.translatorOptions.timeout,
       onDownloadProgress(event) {
         options.onModelLoadProgress?.({
           modelId: 'chrome-translator',
           progress: event.progress,
-          state: event.state as ModelLoadProgress['state'],
+          state: event.state as TranslatorLoadProgress['state'],
           file: event.file,
+          cacheDir: event.cacheDir,
+          executablePath: event.executablePath,
         })
       },
     })
@@ -42,13 +50,11 @@ export function createTranslator(config: MigrateConfig, options: CreateTranslato
 }
 
 type ChromeTranslatorConstructor = new (options?: {
-  channel?: string
-  executablePath?: string
-  headless?: boolean
-  userDataDir?: string
-  keepAlive?: boolean
+  browserCacheDir?: string
+  browserChannel?: 'stable' | 'beta' | 'dev' | 'canary'
+  browserBuildId?: string
   timeout?: number
-  onDownloadProgress?: (event: { progress: number, state: string, file?: string }) => void
+  onDownloadProgress?: (event: { progress: number, state: string, file?: string, cacheDir?: string, executablePath?: string }) => void
 }) => Translator
 
 class LazyChromeTranslator implements Translator {

@@ -97,8 +97,10 @@ export interface ModelLoadProgress {
   /** Progress 0-100 */
   progress: number
   /** Loading state */
-  state: 'initiate' | 'download' | 'progress' | 'done' | 'ready'
+  state: 'initiate' | 'download' | 'progress' | 'done' | 'ready' | 'browser-resolve' | 'browser-download' | 'browser-ready'
   file?: string
+  cacheDir?: string
+  executablePath?: string
 }
 
 export interface LanguageInfo {

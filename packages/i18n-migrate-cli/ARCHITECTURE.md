@@ -155,7 +155,7 @@ tmigrate scan ./src --incremental --clean-deprecated
 
 ### 终端交互流程
 
-`scan` 会按架构阶段持续刷新终端提示，避免本地模型首次加载或下载时看起来像“卡住”：
+`scan` 会按架构阶段持续刷新终端提示，避免本地模型或受管理 Chrome 首次加载、下载时看起来像“卡住”：
 
 ```text
 Preparing translation workspace
@@ -176,6 +176,7 @@ Scanned 12 file(s), skipped 0, extracted 184 text(s).
 | `Scanning source files ...` | `scanner.ts` | 根据 include/exclude 和目标路径查找待扫描文件 |
 | `Processing ...` | `Extractor` / `Parser` | 解析当前文件并提取源语言文本 |
 | `Processing ... loading local model` | `LocalTranslator` / `@translation-master/node` | 本地 ONNX 模型加载或下载中，保持为单一稳定阶段 |
+| `Preparing managed Chrome ...` / `Downloading managed Chrome ...` / `Using managed Chrome ...` | `@translation-master/chrome` | Chrome 后端首次下载受管理浏览器到 `.tmigrate/chrome`，后续命中缓存并展示可追溯路径 |
 | `Processing ... translating ...` | `translator/pipeline.ts` | 展示机器翻译文本数和批次进度；术语表命中的文本不会进入机器翻译 |
 | `Processing ... saving map` | `mapping.ts` | 合并旧映射、保留人工修改，并写入 `.tmigrate/maps/` |
 | `Scan finished.` | `cli.ts` | 扫描结束，随后打印汇总统计 |

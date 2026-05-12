@@ -85,11 +85,9 @@ export interface TranslatorOptions {
   modelBaseUrl?: string
   apiKey?: string
   endpoint?: string
-  chromeChannel?: string
-  chromeExecutablePath?: string
-  chromeHeadless?: boolean
-  chromeUserDataDir?: string
-  chromeKeepAlive?: boolean
+  chromeBrowserCacheDir?: string
+  chromeBrowserChannel?: 'stable' | 'beta' | 'dev' | 'canary'
+  chromeBrowserBuildId?: string
   timeout: number
   retries: number
   concurrency: number
@@ -140,6 +138,7 @@ export interface TranslateResult {
 export interface Translator {
   translate: (texts: string[], options: TranslateOptions) => Promise<TranslateResult[]>
   dispose?: () => Promise<void>
+  preflight?: (options: TranslateOptions) => Promise<void>
 }
 
 export interface FileParser {
@@ -173,7 +172,7 @@ export type ScanProgressEvent
   = | { phase: 'config', message: string }
     | { phase: 'discover', message: string, totalFiles?: number }
     | { phase: 'file', filePath: string, current: number, total: number }
-    | { phase: 'model-load', modelId: string, progress: number, state: string, file?: string }
+    | { phase: 'model-load', modelId: string, progress: number, state: string, file?: string, cacheDir?: string, executablePath?: string }
     | { phase: 'translate', filePath: string, completedBatches: number, totalBatches: number, completedTexts: number, totalTexts: number }
     | { phase: 'write', filePath: string, current: number, total: number }
     | { phase: 'done', result: ScanResult }
