@@ -31,6 +31,7 @@ describe('init prompts', () => {
       'stable',
       '',
       '.tmigrate/chrome',
+      false,
     )
 
     const { promptInitConfig } = await import('../prompts')
@@ -45,6 +46,7 @@ describe('init prompts', () => {
         chromeBrowserChannel: 'stable',
         chromeBrowserBuildId: '',
         chromeBrowserCacheDir: '.tmigrate/chrome',
+        chromeBrowserVisible: false,
       },
     })
   })

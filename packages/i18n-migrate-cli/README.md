@@ -170,6 +170,7 @@ pnpm add -D @translation-master/chrome
 | `chromeBrowserCacheDir` | 可选：覆盖受管理 Chrome 的缓存目录。默认使用项目目录下的 `.tmigrate/chrome` |
 | `chromeBrowserChannel` | 可选：Chrome 通道，默认 `stable`，可选 `beta`、`dev`、`canary` |
 | `chromeBrowserBuildId` | 可选：精确指定 Chrome build ID，留空则按通道解析 |
+| `chromeBrowserVisible` | 可选：是否显示 Chrome 窗口，默认 `false`，需要显式开启才会展示窗口 |
 
 执行时会显示阶段式进度提示：准备中、扫描可回写文件、逐个处理文件、写入源文件。
 

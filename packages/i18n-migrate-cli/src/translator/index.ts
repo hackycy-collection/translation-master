@@ -21,6 +21,7 @@ export function createTranslator(config: MigrateConfig, options: CreateTranslato
       browserCacheDir: config.translatorOptions.chromeBrowserCacheDir,
       browserChannel: config.translatorOptions.chromeBrowserChannel,
       browserBuildId: config.translatorOptions.chromeBrowserBuildId,
+      browserVisible: config.translatorOptions.chromeBrowserVisible,
       timeout: config.translatorOptions.timeout,
       onDownloadProgress(event) {
         options.onModelLoadProgress?.({
@@ -53,6 +54,7 @@ type ChromeTranslatorConstructor = new (options?: {
   browserCacheDir?: string
   browserChannel?: 'stable' | 'beta' | 'dev' | 'canary'
   browserBuildId?: string
+  browserVisible?: boolean
   timeout?: number
   onDownloadProgress?: (event: { progress: number, state: string, file?: string, cacheDir?: string, executablePath?: string }) => void
 }) => Translator

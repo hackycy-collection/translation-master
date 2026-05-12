@@ -88,6 +88,7 @@ export interface TranslatorOptions {
   chromeBrowserCacheDir?: string
   chromeBrowserChannel?: 'stable' | 'beta' | 'dev' | 'canary'
   chromeBrowserBuildId?: string
+  chromeBrowserVisible?: boolean
   timeout: number
   retries: number
   concurrency: number

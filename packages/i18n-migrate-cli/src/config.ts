@@ -78,6 +78,7 @@ export const DEFAULT_CONFIG: MigrateConfig = {
     chromeBrowserCacheDir: '.tmigrate/chrome',
     chromeBrowserChannel: 'stable',
     chromeBrowserBuildId: '',
+    chromeBrowserVisible: false,
     timeout: 30000,
     retries: 3,
     concurrency: 5,

@@ -238,9 +238,16 @@ async function promptTranslatorOptions(
   })
   assertPromptValue(chromeBrowserCacheDir)
 
+  const chromeBrowserVisible = await confirm({
+    message: 'Show Chrome window',
+    initialValue: defaults.translatorOptions?.chromeBrowserVisible ?? false,
+  })
+  assertPromptValue(chromeBrowserVisible)
+
   return {
     chromeBrowserChannel,
     chromeBrowserBuildId: chromeBrowserBuildId.trim(),
     chromeBrowserCacheDir: chromeBrowserCacheDir.trim() || '.tmigrate/chrome',
+    chromeBrowserVisible: chromeBrowserVisible === true,
   }
 }

@@ -34,6 +34,7 @@ export interface Translator {
 export interface ChromeTranslatorOptions {
   userDataDir?: string
   keepAlive?: boolean
+  browserVisible?: boolean
   timeout?: number
   browserCacheDir?: string
   browserChannel?: 'stable' | 'beta' | 'dev' | 'canary'
@@ -129,7 +130,7 @@ export class ChromeTranslator implements Translator {
     const userDataDir = this.options.userDataDir || path.join(os.tmpdir(), 'tmigrate-chrome-translator')
     this.context = await chromium.launchPersistentContext(userDataDir, {
       executablePath: managedBrowser.executablePath,
-      headless: false,
+      headless: !this.options.browserVisible,
       args: [
         '--enable-features=OptimizationGuideOnDeviceModel,TranslateKit',
         '--disable-features=Translate',

@@ -350,6 +350,7 @@ describe('i18n migrate workflow', () => {
       chromeBrowserCacheDir: '.tmigrate/chrome',
       chromeBrowserChannel: 'stable',
       chromeBrowserBuildId: '',
+      chromeBrowserVisible: false,
     })
   })
 
