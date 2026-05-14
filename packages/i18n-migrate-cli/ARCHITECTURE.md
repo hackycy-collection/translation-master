@@ -210,17 +210,17 @@ tmigrate approve
 
 ```bash
 tmigrate convert src --format ts --namespace admin
-tmigrate convert src --output-dir locales/langs --target-only
+tmigrate convert src --output-dir src/locales/langs --target-only
 tmigrate convert src --translate-missing
 tmigrate convert src --no-translate-missing
 ```
 
-默认输出目录是 `locales/langs`，路径形态为：
+默认输出目录是 `src/locales/langs`，路径形态为：
 
 ```text
 源文件:  src/components/Table.vue
-源包:    locales/langs/zh/admin/components/Table.ts
-目标包:  locales/langs/en/admin/components/Table.ts
+源包:    src/locales/langs/zh/admin/components/Table.ts
+目标包:  src/locales/langs/en/admin/components/Table.ts
 ```
 
 生成对象是平铺字典，key 来自 map 中持久化的英文语义 key：
@@ -398,7 +398,7 @@ tmigrate restore --list
   ],
   "translator": "local",
   "convert": {
-    "outputDir": "locales/langs",
+    "outputDir": "src/locales/langs",
     "format": "json",
     "includeSourceLocale": true,
     "translateMissing": false,

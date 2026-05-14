@@ -215,18 +215,18 @@ describe('i18n migrate workflow', () => {
     const result = await convertMaps({
       cwd,
       path: 'src/components',
-      outputDir: 'locales/langs',
+      outputDir: 'src/locales/langs',
       namespace: 'admin',
       format: 'ts',
     })
 
     expect(result.files).toMatchObject([
-      { locale: 'en-US', outputPath: 'locales/langs/en-US/admin/components/Table.ts', entries: 2, changed: true },
-      { locale: 'zh-CN', outputPath: 'locales/langs/zh-CN/admin/components/Table.ts', entries: 2, changed: true },
+      { locale: 'en-US', outputPath: 'src/locales/langs/en-US/admin/components/Table.ts', entries: 2, changed: true },
+      { locale: 'zh-CN', outputPath: 'src/locales/langs/zh-CN/admin/components/Table.ts', entries: 2, changed: true },
     ])
 
-    const target = await readFile(path.join(cwd, 'locales', 'langs', 'en-US', 'admin', 'components', 'Table.ts'), 'utf8')
-    const source = await readFile(path.join(cwd, 'locales', 'langs', 'zh-CN', 'admin', 'components', 'Table.ts'), 'utf8')
+    const target = await readFile(path.join(cwd, 'src', 'locales', 'langs', 'en-US', 'admin', 'components', 'Table.ts'), 'utf8')
+    const source = await readFile(path.join(cwd, 'src', 'locales', 'langs', 'zh-CN', 'admin', 'components', 'Table.ts'), 'utf8')
 
     expect(target).toBe(`export default {\n  "enterUsername": "EN:请输入用户名",\n  "submit": "EN:提交"\n}\n`)
     expect(source).toBe(`export default {\n  "enterUsername": "请输入用户名",\n  "submit": "提交"\n}\n`)
@@ -284,9 +284,9 @@ describe('i18n migrate workflow', () => {
     })
 
     expect(result.files).toMatchObject([
-      { locale: 'en', outputPath: 'locales/langs/en/views/Profile.json', entries: 1, changed: true },
+      { locale: 'en', outputPath: 'src/locales/langs/en/views/Profile.json', entries: 1, changed: true },
     ])
-    expect(await readFile(path.join(cwd, 'locales', 'langs', 'en', 'views', 'Profile.json'), 'utf8'))
+    expect(await readFile(path.join(cwd, 'src', 'locales', 'langs', 'en', 'views', 'Profile.json'), 'utf8'))
       .toBe(`{\n  "saveSettings": "EN:保存设置"\n}\n`)
   })
 
@@ -320,7 +320,7 @@ describe('i18n migrate workflow', () => {
     })
 
     expect(translator.seen).toEqual([{ sourceLocale: 'zh-CN', targetLocale: 'en-US' }])
-    expect(await readFile(path.join(cwd, 'locales', 'langs', 'en-US', 'views', 'Reports.json'), 'utf8'))
+    expect(await readFile(path.join(cwd, 'src', 'locales', 'langs', 'en-US', 'views', 'Reports.json'), 'utf8'))
       .toBe(`{\n  "exportReports": "zh-CN->en-US:导出报表"\n}\n`)
   })
 
@@ -355,7 +355,7 @@ describe('i18n migrate workflow', () => {
     })
 
     expect(translator.seen).toEqual([])
-    expect(await readFile(path.join(cwd, 'locales', 'langs', 'en', 'views', 'Alerts.json'), 'utf8'))
+    expect(await readFile(path.join(cwd, 'src', 'locales', 'langs', 'en', 'views', 'Alerts.json'), 'utf8'))
       .toBe(`{}\n`)
   })
 
@@ -371,7 +371,7 @@ describe('i18n migrate workflow', () => {
 
     await convertMaps({ cwd, includeSourceLocale: false, legacyTextKey: true })
 
-    expect(await readFile(path.join(cwd, 'locales', 'langs', 'en', 'views', 'Legacy.json'), 'utf8'))
+    expect(await readFile(path.join(cwd, 'src', 'locales', 'langs', 'en', 'views', 'Legacy.json'), 'utf8'))
       .toBe(`{\n  "保存设置": "EN:保存设置"\n}\n`)
   })
 

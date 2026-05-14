@@ -49,9 +49,10 @@ export function githubTreeToRawBaseUrl(resource: string): string | undefined {
 }
 
 const DEFAULT_GLOSSARY_PRESET_INDEX = defaultGlossaryPresetIndex()
+export const DEFAULT_CONVERT_OUTPUT_DIR = 'src/locales/langs'
 
 const DEFAULT_CONVERT_CONFIG: ConvertConfig = {
-  outputDir: 'locales/langs',
+  outputDir: DEFAULT_CONVERT_OUTPUT_DIR,
   format: 'json',
   includeSourceLocale: true,
   translateMissing: false,

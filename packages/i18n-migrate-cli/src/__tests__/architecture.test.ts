@@ -156,13 +156,13 @@ describe('i18n migrate architecture primitives', () => {
     const config = defineConfig({
       exclude: ['node_modules'],
       convert: {
-        outputDir: 'packages/app/locales/langs',
+        outputDir: 'packages/app/src/locales/langs',
       },
     })
 
     expect(config.exclude).toContain('node_modules')
-    expect(config.exclude).toContain('packages/app/locales/langs')
-    expect(config.exclude).toContain('packages/app/locales/langs/**')
+    expect(config.exclude).toContain('packages/app/src/locales/langs')
+    expect(config.exclude).toContain('packages/app/src/locales/langs/**')
   })
 
   it('prefers popular languages in init locale options', () => {

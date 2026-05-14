@@ -11,7 +11,7 @@ import type {
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
-import { loadConfig } from './config'
+import { DEFAULT_CONVERT_OUTPUT_DIR, loadConfig } from './config'
 import { isNodeError, readJsonFile } from './fs-utils'
 import { loadGlossary } from './glossary'
 import { messageWithNamedParams } from './keygen'
@@ -147,7 +147,7 @@ function resolveConvertOptions(
   configTargetLocale: string,
   options: ConvertOptions,
 ): ConvertRuntimeOptions {
-  const outputDir = normalizeRelativePath(options.outputDir ?? convertConfig?.outputDir ?? 'locales/langs', 'output directory')
+  const outputDir = normalizeRelativePath(options.outputDir ?? convertConfig?.outputDir ?? DEFAULT_CONVERT_OUTPUT_DIR, 'output directory')
   const namespace = options.namespace ?? convertConfig?.namespace
   return {
     outputDir,

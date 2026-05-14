@@ -171,12 +171,12 @@ tmigrate apply
 
 ### `convert`
 
-把 `.tmigrate/maps/**/*.json` 转换为传统 locale 语言包。默认输出到 `locales/langs`，同时生成源语言包和目标语言包：
+把 `.tmigrate/maps/**/*.json` 转换为传统 locale 语言包。默认输出到 `src/locales/langs`，同时生成源语言包和目标语言包：
 
 ```bash
 tmigrate convert
 tmigrate convert src/components --format ts
-tmigrate convert src --output-dir packages/app/locales/langs --namespace admin
+tmigrate convert src --output-dir packages/app/src/locales/langs --namespace admin
 tmigrate convert src --target-only
 tmigrate convert src --translate-missing
 tmigrate convert src --no-translate-missing
@@ -187,8 +187,8 @@ tmigrate convert src --dry-run
 例如 `src/components/Table.vue` 对应的 map 会生成：
 
 ```text
-locales/langs/zh/admin/components/Table.ts
-locales/langs/en/admin/components/Table.ts
+src/locales/langs/zh/admin/components/Table.ts
+src/locales/langs/en/admin/components/Table.ts
 ```
 
 生成内容是平铺字典。字段名默认使用 map 中持久化的英文语义 key，源语言包使用原文作为值，目标语言包使用 map 中的译文：
@@ -205,7 +205,7 @@ export default {
 | 选项 | 说明 |
 |---|---|
 | `[path]` | 只转换指定源文件或目录对应的 map |
-| `--output-dir <dir>` | 输出目录，默认 `locales/langs` |
+| `--output-dir <dir>` | 输出目录，默认 `src/locales/langs` |
 | `--format <format>` | 输出格式：`json`、`js`、`ts` |
 | `--namespace <dir>` | 每个 locale 目录下额外增加一层目录，避免和现有语言包冲突 |
 | `--from <locale>` | 源语言包 locale 名，默认使用配置里的 `sourceLocale` |
@@ -408,7 +408,7 @@ tmigrate restore
     "index": "https://raw.githubusercontent.com/hackycy/translation-master/main/packages/i18n-migrate-cli/src/glossary-presets/index.json"
   },
   "convert": {
-    "outputDir": "locales/langs",
+    "outputDir": "src/locales/langs",
     "format": "json",
     "namespace": "app",
     "includeSourceLocale": true,

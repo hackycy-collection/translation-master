@@ -6,6 +6,7 @@ import pc from 'picocolors'
 import { adaptSources } from './adapt'
 import { applyTranslations, restoreBackups } from './apply'
 import { approveTranslations } from './approve'
+import { DEFAULT_CONVERT_OUTPUT_DIR } from './config'
 import { convertMaps } from './converter'
 import { initGlossary } from './glossary'
 import { initProject } from './init'
@@ -98,7 +99,7 @@ export function createCli(options: CreateCliOptions): Command {
   program
     .command('convert [path]')
     .description('Convert scan maps into locale package files.')
-    .option('-o, --output-dir <dir>', 'locale package output directory, defaults to locales/langs')
+    .option('-o, --output-dir <dir>', `locale package output directory, defaults to ${DEFAULT_CONVERT_OUTPUT_DIR}`)
     .option('-f, --format <format>', 'output format: json, js, ts')
     .option('--namespace <dir>', 'extra directory below each locale folder')
     .option('--from <locale>', 'source locale for generated source package')
