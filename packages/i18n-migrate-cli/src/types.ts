@@ -128,20 +128,9 @@ export interface AdaptKeyReferenceConfig {
   separator: string
 }
 
-export interface AdaptImportConfig {
-  script: {
-    enabled: boolean
-    source: string
-    specifier: string
-    localName?: string
-    importKind: 'named' | 'default'
-  }
-}
-
 export interface AdaptConfig {
   callee: AdaptCalleeConfig
   keyReference: AdaptKeyReferenceConfig
-  import: AdaptImportConfig
 }
 
 export interface MigrateConfig {
@@ -237,7 +226,6 @@ export interface AdaptOptions {
   path?: string
   dryRun?: boolean
   strategy?: 'ast' | 'range'
-  injectRuntime?: boolean
   onProgress?: (event: WorkflowProgressEvent) => void
 }
 

@@ -434,7 +434,7 @@ describe('i18n migrate workflow', () => {
     ].join('\n'))
   })
 
-  it('injects the configured Vue i18n runtime into script setup when enabled', async () => {
+  it('ignores legacy runtime injection config when adapting script setup', async () => {
     const cwd = await createTempProject()
     const sourcePath = path.join(cwd, 'src', 'views', 'Account.vue')
     await mkdir(path.dirname(sourcePath), { recursive: true })
@@ -459,16 +459,13 @@ describe('i18n migrate workflow', () => {
     expect(await readFile(sourcePath, 'utf8')).toBe([
       '<template><h1>{{ $t(\'accountSecurity\') }}</h1></template>',
       '<script setup lang="ts">',
-      'import { useI18n } from \'vue-i18n\'',
-      'const { t } = useI18n()',
-      '',
       'const title = t(\'accountSecurity\')',
       '</script>',
       '',
     ].join('\n'))
   })
 
-  it('supports custom runtime import source, imported name, local name, and script callee', async () => {
+  it('supports custom script callee without injecting runtime imports', async () => {
     const cwd = await createTempProject()
     const sourcePath = path.join(cwd, 'src', 'views', 'CustomRuntime.vue')
     await mkdir(path.dirname(sourcePath), { recursive: true })
@@ -485,15 +482,6 @@ describe('i18n migrate workflow', () => {
     const config = JSON.parse(await readFile(configPath, 'utf8')) as { adapt?: Record<string, unknown> }
     config.adapt = {
       callee: { script: 'translate' },
-      import: {
-        script: {
-          enabled: true,
-          source: '@/composables/i18n',
-          specifier: 'createI18n',
-          localName: 'useAppI18n',
-          importKind: 'default',
-        },
-      },
     }
     await writeFile(configPath, JSON.stringify(config, null, 2), 'utf8')
 
@@ -504,16 +492,13 @@ describe('i18n migrate workflow', () => {
     expect(await readFile(sourcePath, 'utf8')).toBe([
       '<template><h1>{{ $t(\'accountSecurity\') }}</h1></template>',
       '<script setup lang="ts">',
-      'import useAppI18n from \'@/composables/i18n\'',
-      'const { t: translate } = useAppI18n()',
-      '',
       'const title = translate(\'accountSecurity\')',
       '</script>',
       '',
     ].join('\n'))
   })
 
-  it('does not inject top-level useI18n into normal Vue script blocks', async () => {
+  it('adapts normal Vue script blocks without injecting runtime imports', async () => {
     const cwd = await createTempProject()
     const sourcePath = path.join(cwd, 'src', 'views', 'Options.vue')
     await mkdir(path.dirname(sourcePath), { recursive: true })
@@ -530,20 +515,13 @@ describe('i18n migrate workflow', () => {
     await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
     await approveTranslations({ cwd })
 
-    const result = await adaptSources({ cwd, injectRuntime: true })
+    const result = await adaptSources({ cwd })
 
-    expect(result.skipped).toEqual([
-      expect.objectContaining({
-        sourcePath: 'src/views/Options.vue',
-        text: '账号安全',
-        key: 'accountSecurity',
-        reason: 'unsupported-context',
-      }),
-    ])
+    expect(result.skipped).toEqual([])
     expect(await readFile(sourcePath, 'utf8')).toBe([
       '<template><h1>{{ $t(\'accountSecurity\') }}</h1></template>',
       '<script lang="ts">',
-      'const title = \'账号安全\'',
+      'const title = t(\'accountSecurity\')',
       'export default { name: \'OptionsPage\' }',
       '</script>',
       '',

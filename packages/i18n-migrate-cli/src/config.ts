@@ -12,9 +12,6 @@ export type MigrateConfigInput = Omit<Partial<MigrateConfig>, 'convert' | 'trans
   adapt?: Partial<AdaptConfig> & {
     callee?: Partial<AdaptConfig['callee']>
     keyReference?: Partial<AdaptConfig['keyReference']>
-    import?: {
-      script?: Partial<AdaptConfig['import']['script']>
-    }
   }
 }
 
@@ -68,14 +65,6 @@ const DEFAULT_ADAPT_CONFIG: AdaptConfig = {
   keyReference: {
     mode: 'local',
     separator: '.',
-  },
-  import: {
-    script: {
-      enabled: false,
-      source: 'vue-i18n',
-      specifier: 'useI18n',
-      importKind: 'named',
-    },
   },
 }
 
@@ -137,12 +126,6 @@ export function defineConfig(config: MigrateConfigInput): MigrateConfig {
     keyReference: {
       ...DEFAULT_ADAPT_CONFIG.keyReference,
       ...config.adapt?.keyReference,
-    },
-    import: {
-      script: {
-        ...DEFAULT_ADAPT_CONFIG.import.script,
-        ...config.adapt?.import?.script,
-      },
     },
   }
 

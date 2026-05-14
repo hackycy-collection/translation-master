@@ -227,7 +227,6 @@ tmigrate adapt src
 tmigrate adapt src --dry-run
 tmigrate adapt src/components
 tmigrate adapt src --strategy ast
-tmigrate adapt src --inject-runtime
 ```
 
 默认改写形式：
@@ -245,45 +244,8 @@ tmigrate adapt src --inject-runtime
 | `[path]` | 只改写指定源文件或目录对应的 map |
 | `--dry-run` | 只打印 diff，不写入源码 |
 | `--strategy <strategy>` | 改写策略：`ast`、`range`，当前默认使用安全范围改写 |
-| `--inject-runtime` | 本次执行自动注入配置中的 script i18n runtime |
-| `--no-inject-runtime` | 本次执行禁用配置中的 script i18n runtime 注入 |
 
-当 `adapt.import.script.enabled` 为 `true`，或本次执行传入 `--inject-runtime` 时，Vue `<script setup>` 中生成 `t('key')` 后会自动补运行时接入。例如默认配置会插入：
-
-```ts
-import { useI18n } from 'vue-i18n'
-
-const { t } = useI18n()
-```
-
-导入语句完全可配置。比如：
-
-```jsonc
-{
-  "adapt": {
-    "callee": { "script": "translate" },
-    "import": {
-      "script": {
-        "enabled": true,
-        "source": "@/composables/i18n",
-        "specifier": "createI18n",
-        "localName": "useAppI18n",
-        "importKind": "default"
-      }
-    }
-  }
-}
-```
-
-会生成：
-
-```ts
-import useAppI18n from '@/composables/i18n'
-
-const { t: translate } = useAppI18n()
-```
-
-运行时注入当前只自动处理 Vue `<script setup>`。如果文件只有普通 `<script>`，模板里的 `$t(...)` 仍会正常改写，但 script 字符串会跳过并报告，需要后续用 Options API 专门策略处理，避免在模块顶层生成不可用的 `useI18n()` 调用。
+`adapt` 不会自动注入 script runtime、import 语句或 `useI18n()` 绑定。生成脚本调用前，请先在目标文件中按项目约定准备好 `t` 或自定义 `adapt.callee.script` 对应的函数。
 
 #### 回写转义策略
 
@@ -424,15 +386,6 @@ tmigrate restore
     "keyReference": {
       "mode": "local",
       "separator": "."
-    },
-    "import": {
-      "script": {
-        "enabled": false,
-        "source": "vue-i18n",
-        "specifier": "useI18n",
-        "localName": "useI18n",
-        "importKind": "named"
-      }
     }
   },
   "translatorOptions": {

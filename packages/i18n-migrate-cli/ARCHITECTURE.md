@@ -45,7 +45,7 @@ Convert       Adapt
 生成 locale    改写为 $t()/t()
   │             │
   ▼             ▼
-语言包文件      源码 + 可选运行时注入
+语言包文件      源码
 
 legacy: approve 后也可以走 apply，直接把原文替换为译文。
 ```
@@ -248,7 +248,6 @@ export default {
 
 ```bash
 tmigrate adapt src --dry-run
-tmigrate adapt src --inject-runtime
 ```
 
 当前安全改写范围：
@@ -258,34 +257,7 @@ tmigrate adapt src --inject-runtime
 - Vue `<script setup>` / TS / JS 字符串：`'账号安全'` -> `t('accountSecurity')`
 - Vue template 混合插值：`{{ user.name }} 有 {{ stats.total }} 条记录` -> `{{ $t('userRecords', { userName: user.name, statsTotal: stats.total }) }}`
 
-当 `adapt.import.script.enabled` 或 `--inject-runtime` 开启时，Vue `<script setup>` 中生成 `t(...)` 后会自动补配置化运行时：
-
-```ts
-import { useI18n } from 'vue-i18n'
-
-const { t } = useI18n()
-```
-
-导入来源、导入名、本地名和 import kind 都来自配置：
-
-```jsonc
-{
-  "adapt": {
-    "callee": { "script": "translate" },
-    "import": {
-      "script": {
-        "enabled": true,
-        "source": "@/composables/i18n",
-        "specifier": "createI18n",
-        "localName": "useAppI18n",
-        "importKind": "default"
-      }
-    }
-  }
-}
-```
-
-普通 Vue `<script>` 暂不自动注入顶层 `useI18n()`，因为 Options API 需要更细的 AST 策略。开启 runtime 注入时，普通 `<script>` 里的脚本文案会跳过并报告，避免生成不可用代码；模板仍会正常改写为 `$t(...)`。
+`adapt` 不自动注入 script runtime、import 语句或 `useI18n()` 绑定。脚本字符串改写前，目标文件需要按项目约定自行提供 `t` 或自定义 `adapt.callee.script` 对应的函数。
 
 ### 阶段五：legacy 人工确认 + 直接回写
 
@@ -413,15 +385,6 @@ tmigrate restore --list
     "keyReference": {
       "mode": "local",
       "separator": "."
-    },
-    "import": {
-      "script": {
-        "enabled": false,
-        "source": "vue-i18n",
-        "specifier": "useI18n",
-        "localName": "useI18n",
-        "importKind": "named"
-      }
     }
   },
   "translatorOptions": {
