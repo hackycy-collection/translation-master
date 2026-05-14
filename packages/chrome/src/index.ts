@@ -455,12 +455,41 @@ async function ensureCompatibleGoogleChrome(executablePath: string): Promise<str
 
 async function readChromeVersion(executablePath: string): Promise<string> {
   try {
+    if (process.platform === 'win32')
+      return await readWindowsChromeVersion(executablePath)
+
     const { stdout, stderr } = await execFileAsync(executablePath, ['--version'], { timeout: 10000 })
     return (stdout || stderr).trim()
   }
   catch (error) {
     throw new Error(`Failed to read Google Chrome version from ${executablePath}.`, { cause: toError(error) })
   }
+}
+
+async function readWindowsChromeVersion(executablePath: string): Promise<string> {
+  const script = [
+    '$ErrorActionPreference = "Stop"',
+    '$item = Get-Item -LiteralPath $args[0]',
+    '$name = $item.VersionInfo.ProductName',
+    '$version = $item.VersionInfo.ProductVersion',
+    'if (-not $name) { $name = "Google Chrome" }',
+    'if (-not $version) { $version = $item.VersionInfo.FileVersion }',
+    'if (-not $version) { throw "Chrome executable has no file version." }',
+    'Write-Output "$name $version"',
+  ].join('; ')
+  const { stdout } = await execFileAsync('powershell.exe', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-Command',
+    script,
+    executablePath,
+  ], { timeout: 10000 })
+  const versionText = stdout.trim()
+  if (!versionText)
+    throw new Error('Chrome executable has no file version.')
+  return versionText
 }
 
 export function parseChromeMajorVersion(versionText: string): number | undefined {
