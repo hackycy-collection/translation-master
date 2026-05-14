@@ -104,7 +104,6 @@ export const DEFAULT_CONFIG: MigrateConfig = {
     apiKey: '',
     endpoint: '',
     chromeBrowserExecutablePath: '',
-    chromeBrowserChannel: 'stable',
     chromeBrowserVisible: true,
     timeout: 30000,
     retries: 3,

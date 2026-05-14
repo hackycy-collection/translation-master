@@ -156,11 +156,7 @@ tmigrate apply
 
 #### `chrome` 后端配置
 
-`chrome` 后端依赖独立包 `@translation-master/chrome` 和本机 Google Chrome 138+。不会自动下载 Chrome for Testing；如果找不到兼容的 Google Chrome，请先从 <https://www.google.com/chrome/> 安装或升级，或在配置里指定 `chromeBrowserExecutablePath`。
-
-```bash
-pnpm add -D @translation-master/chrome
-```
+`chrome` 后端随 `@translation-master/i18n-migrate-cli` 安装 `@translation-master/chrome`，但仍需要本机 Google Chrome 138+。该后端只依赖 `playwright-core`，不会自动下载 Chrome for Testing；如果找不到兼容的 Google Chrome，请先从 <https://www.google.com/chrome/> 安装或升级，或在配置里指定 `chromeBrowserExecutablePath`。
 
 扫描时会在终端提示正在使用的 Google Chrome 可执行文件路径，便于追溯。
 
@@ -168,8 +164,7 @@ pnpm add -D @translation-master/chrome
 
 | 选项 | 说明 |
 |---|---|
-| `chromeBrowserChannel` | 可选：Chrome 通道，默认 `stable`，可选 `beta`、`dev`、`canary` |
-| `chromeBrowserExecutablePath` | 可选：指定 Google Chrome 可执行文件路径，留空则按通道自动查找 |
+| `chromeBrowserExecutablePath` | 可选：指定 Google Chrome 可执行文件路径，留空则自动查找本机 Stable Chrome |
 | `chromeBrowserVisible` | 可选：是否显示 Chrome 窗口，默认 `true`。首次下载内置翻译模型时建议保持显示 |
 
 执行时会显示阶段式进度提示：准备中、扫描可回写文件、逐个处理文件、写入源文件。

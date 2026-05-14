@@ -35,9 +35,7 @@ export interface ChromeTranslatorOptions {
   browserVisible?: boolean
   timeout?: number
   browserExecutablePath?: string
-  browserCacheDir?: string
   browserChannel?: 'stable' | 'beta' | 'dev' | 'canary'
-  browserBuildId?: string
   onDownloadProgress?: (event: ChromeDownloadProgressEvent) => void
 }
 
@@ -45,7 +43,6 @@ export interface ChromeDownloadProgressEvent {
   progress: number
   state: string
   file?: string
-  cacheDir?: string
   executablePath?: string
   downloadUrl?: string
   version?: string
@@ -342,18 +339,12 @@ export class ChromeTranslator implements Translator {
   }
 }
 
-async function resolveChromeBrowser(options: ChromeTranslatorOptions): Promise<{ executablePath: string, cacheDir?: string, buildId?: string }> {
+async function resolveChromeBrowser(options: ChromeTranslatorOptions): Promise<{ executablePath: string }> {
   options.onDownloadProgress?.({
     progress: 0,
     state: 'browser-resolve',
     phase: 'browser',
   })
-
-  if (options.browserBuildId) {
-    throw new Error(
-      `Managed Chrome for Testing builds are not supported for Chrome Translator. Install or upgrade desktop Google Chrome instead: ${GOOGLE_CHROME_DOWNLOAD_URL}`,
-    )
-  }
 
   if (options.browserExecutablePath) {
     const executablePath = path.resolve(options.browserExecutablePath)

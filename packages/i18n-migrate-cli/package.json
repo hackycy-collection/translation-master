@@ -46,17 +46,10 @@
     "test": "vitest --passWithNoTests",
     "typecheck": "tsc"
   },
-  "peerDependencies": {
-    "@translation-master/chrome": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@translation-master/chrome": {
-      "optional": true
-    }
-  },
   "dependencies": {
     "@babel/parser": "catalog:cli",
     "@clack/prompts": "catalog:cli",
+    "@translation-master/chrome": "workspace:*",
     "@translation-master/core": "workspace:*",
     "@translation-master/node": "workspace:*",
     "@vue/compiler-sfc": "catalog:cli",
@@ -66,7 +59,6 @@
     "yaml": "catalog:testing"
   },
   "devDependencies": {
-    "@translation-master/chrome": "workspace:*",
     "@types/node": "catalog:types",
     "tsdown": "catalog:cli",
     "typescript": "catalog:cli",

@@ -213,18 +213,6 @@ async function promptTranslatorOptions(
     }
   }
 
-  const chromeBrowserChannel = await select({
-    message: 'Google Chrome channel',
-    initialValue: defaults.translatorOptions?.chromeBrowserChannel ?? 'stable',
-    options: [
-      { value: 'stable', label: 'Stable' },
-      { value: 'beta', label: 'Beta' },
-      { value: 'dev', label: 'Dev' },
-      { value: 'canary', label: 'Canary' },
-    ],
-  })
-  assertPromptValue(chromeBrowserChannel)
-
   const chromeBrowserExecutablePath = await text({
     message: 'Google Chrome executable path',
     initialValue: defaults.translatorOptions?.chromeBrowserExecutablePath ?? '',
@@ -240,7 +228,6 @@ async function promptTranslatorOptions(
   assertPromptValue(chromeBrowserVisible)
 
   return {
-    chromeBrowserChannel,
     chromeBrowserExecutablePath: normalizedChromeBrowserExecutablePath,
     chromeBrowserVisible: chromeBrowserVisible === true,
   }

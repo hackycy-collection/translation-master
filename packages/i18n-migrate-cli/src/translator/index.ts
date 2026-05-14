@@ -35,9 +35,6 @@ export function createTranslator(config: MigrateConfig, options: CreateTranslato
   if (config.translator === 'chrome') {
     return new LazyChromeTranslator({
       browserExecutablePath: config.translatorOptions.chromeBrowserExecutablePath || undefined,
-      browserCacheDir: config.translatorOptions.chromeBrowserCacheDir || undefined,
-      browserChannel: config.translatorOptions.chromeBrowserChannel,
-      browserBuildId: config.translatorOptions.chromeBrowserBuildId || undefined,
       browserVisible: config.translatorOptions.chromeBrowserVisible,
       timeout: config.translatorOptions.timeout,
       onDownloadProgress(event) {
@@ -46,7 +43,6 @@ export function createTranslator(config: MigrateConfig, options: CreateTranslato
           progress: event.progress,
           state: event.state as TranslatorLoadProgress['state'],
           file: event.file,
-          cacheDir: event.cacheDir,
           executablePath: event.executablePath,
           downloadUrl: event.downloadUrl,
           version: event.version,
@@ -71,12 +67,10 @@ export function createTranslator(config: MigrateConfig, options: CreateTranslato
 
 type ChromeTranslatorConstructor = new (options?: {
   browserExecutablePath?: string
-  browserCacheDir?: string
   browserChannel?: 'stable' | 'beta' | 'dev' | 'canary'
-  browserBuildId?: string
   browserVisible?: boolean
   timeout?: number
-  onDownloadProgress?: (event: { progress: number, state: string, file?: string, cacheDir?: string, executablePath?: string, downloadUrl?: string, version?: string }) => void
+  onDownloadProgress?: (event: { progress: number, state: string, file?: string, executablePath?: string, downloadUrl?: string, version?: string }) => void
 }) => Translator
 
 class LazyChromeTranslator implements Translator {
@@ -113,8 +107,8 @@ async function loadChromeTranslator(options: ConstructorParameters<ChromeTransla
   }
   catch (error) {
     throw new Error(
-      'Chrome translator requires the optional package "@translation-master/chrome". '
-      + 'Install it before using translator: "chrome".',
+      'Chrome translator package "@translation-master/chrome" failed to load. '
+      + 'Reinstall @translation-master/i18n-migrate-cli or check the package installation.',
       { cause: error instanceof Error ? error : new Error(String(error)) },
     )
   }

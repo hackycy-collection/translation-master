@@ -28,7 +28,6 @@ describe('init prompts', () => {
       ['vue', 'ts'],
       'src',
       'chrome',
-      'stable',
       '',
       true,
     )
@@ -42,7 +41,6 @@ describe('init prompts', () => {
       include: ['src/**/*.{vue,ts}'],
       translator: 'chrome',
       translatorOptions: {
-        chromeBrowserChannel: 'stable',
         chromeBrowserExecutablePath: '',
         chromeBrowserVisible: true,
       },

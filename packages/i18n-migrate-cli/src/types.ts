@@ -94,9 +94,6 @@ export interface TranslatorOptions {
   apiKey?: string
   endpoint?: string
   chromeBrowserExecutablePath?: string
-  chromeBrowserCacheDir?: string
-  chromeBrowserChannel?: 'stable' | 'beta' | 'dev' | 'canary'
-  chromeBrowserBuildId?: string
   chromeBrowserVisible?: boolean
   timeout: number
   retries: number
