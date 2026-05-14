@@ -148,12 +148,14 @@ export function createCli(options: CreateCliOptions): Command {
     .command('adapt [path]')
     .description('Rewrite approved source text into project i18n calls.')
     .option('--dry-run', 'print a diff without writing files')
+    .option('--all', 'adapt every pending ready map file instead of the next one')
     .option('--strategy <strategy>', 'rewrite strategy: ast, range')
-    .action(async (targetPath: string | undefined, command: { dryRun?: boolean, strategy?: string }) => {
+    .action(async (targetPath: string | undefined, command: { dryRun?: boolean, all?: boolean, strategy?: string }) => {
       const progress = createWorkflowProgressRenderer('adapt')
       const result = await adaptSources({
         path: targetPath,
         dryRun: command.dryRun,
+        all: command.all,
         strategy: normalizeAdaptStrategy(command.strategy),
         onProgress: progress.update,
       })
@@ -163,7 +165,14 @@ export function createCli(options: CreateCliOptions): Command {
           console.log(file.diff)
       }
       const changed = result.files.filter(file => file.changed).length
-      console.log(pc.green(`${result.dryRun ? 'Previewed' : 'Adapted'} ${changed} changed file(s).`))
+      if (result.files.length === 0) {
+        console.log(pc.green('No pending source file needs adapt.'))
+      }
+      else {
+        console.log(pc.green(`${result.dryRun ? 'Previewed' : 'Adapted'} ${changed} changed file(s).`))
+        if (!command.all)
+          console.log(pc.dim('Default adapt processes one pending file at a time. Use `tmigrate adapt --all` to process every ready file.'))
+      }
       if (result.skipped.length > 0)
         console.log(pc.yellow(`Skipped ${result.skipped.length} entr${result.skipped.length === 1 ? 'y' : 'ies'} that need manual handling.`))
     })

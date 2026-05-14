@@ -224,6 +224,7 @@ export default {
 
 ```bash
 tmigrate adapt src
+tmigrate adapt src --all
 tmigrate adapt src --dry-run
 tmigrate adapt src/components
 tmigrate adapt src --strategy ast
@@ -245,9 +246,12 @@ tmigrate adapt src --strategy ast
 
 | 选项 | 说明 |
 |---|---|
-| `[path]` | 只改写指定源文件或目录对应的 map |
+| `[path]` | 只在指定源文件或目录对应的 map 队列里执行 |
 | `--dry-run` | 只打印 diff，不写入源码 |
+| `--all` | 一次性改写所有待执行且已批准、key 已确认的 map 文件 |
 | `--strategy <strategy>` | 改写策略：`ast`、`range`，当前默认使用安全范围改写 |
+
+默认情况下，`adapt` 每次只处理下一个待执行文件，并在对应 map 文件里记录本次已执行的批准条目。这样大项目可以逐个文件迁移并用 `tmigrate stats` 查看进度；只有显式传入 `--all` 时才会一次性处理所有就绪文件。
 
 `adapt` 会为 Vue `<script setup>` 和普通 `<script>` 里的 `setup()` 自动注入 `useI18n()` 绑定。普通 TS/JS 模块默认不会凭空注入 runtime；需要在 `adapt.runtime.script.import` 中配置 `source`、`named` 和可选 `local`，或者源码中已有同名 `t` 绑定。没有可靠运行时上下文的字符串会被跳过，留给人工处理。
 
@@ -317,9 +321,10 @@ tmigrate stats src/modules/order
 
 - **总览**：map 总数、可读/损坏数量、当前/孤儿 map、当前条目和风险提示。
 - **迁移进度**：译文覆盖率、已批准比例、可回写比例，并用进度条展示。
-- **工作队列**：可回写、待校对、待补译、已跳过、已废弃的条目数和占比。
+- **工作队列**：可回写、待 adapt、待校对、待补译、已跳过、已废弃的条目数和占比。
 - **译文来源**：glossary / machine / manual 的来源分布。
 - **重点文件 Top 5**：只列待补译、待校对或废弃条目最多的文件，避免大项目刷屏。
+- **待 adapt 文件 Top 5**：列出已经批准但还没有执行 `adapt` 的文件。
 - **孤儿/损坏 Top 5**：只展示最需要清理或修复的异常 map 文件。
 - **建议**：根据当前队列给出补译、校对、回写、清理等建议。
 

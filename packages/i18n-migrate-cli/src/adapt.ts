@@ -4,12 +4,13 @@ import path from 'node:path'
 import process from 'node:process'
 import { parse as babelParse } from '@babel/parser'
 import { parse as parseVue } from '@vue/compiler-sfc'
+import { createMapAdaptMeta, hasReadyAdaptEntries, isMapAdapted } from './adapt-status'
 import { backupFile } from './backup'
 import { loadConfig } from './config'
 import { Extractor } from './extractor'
 import { paramNameForExpression } from './keygen'
 import { findMapPaths } from './map-paths'
-import { readMapFile } from './mapping'
+import { readMapFile, writeMapFile } from './mapping'
 import { mapPathToSourcePath, toPosixPath } from './paths'
 import { createUnifiedDiff } from './reporter'
 
@@ -24,6 +25,11 @@ interface AdaptFileResult {
   content: string
   applied: number
   skipped: AdaptSkip[]
+}
+
+interface AdaptWorkItem {
+  sourcePath: string
+  mapFile: Awaited<ReturnType<typeof readMapFile>>
 }
 
 interface AdaptParam {
@@ -128,25 +134,25 @@ export async function adaptSources(options: AdaptOptions = {}): Promise<AdaptRes
   options.onProgress?.({ phase: 'prepare', message: options.dryRun ? 'Preparing i18n adapt preview' : 'Preparing i18n source adaptation' })
   const config = await loadConfig(cwd)
   const extractor = new Extractor(config)
-  const sourcePaths = (await findMapPaths(cwd, options.path)).map(mapPathToSourcePath).sort()
+  const workItems = await findAdaptWorkItems(cwd, options.path, options.all === true)
   const batchId = new Date().toISOString()
   const files: AdaptResult['files'] = []
   const allSkipped: AdaptSkip[] = []
-  options.onProgress?.({ phase: 'discover', message: `Found ${sourcePaths.length} source file(s) with maps`, total: sourcePaths.length })
+  options.onProgress?.({ phase: 'discover', message: `Found ${workItems.length} pending source file(s) for adapt`, total: workItems.length })
 
-  for (const [index, sourcePath] of sourcePaths.entries()) {
+  for (const [index, workItem] of workItems.entries()) {
+    const { sourcePath, mapFile } = workItem
     options.onProgress?.({
       phase: 'file',
       path: sourcePath,
       current: index + 1,
-      total: sourcePaths.length,
+      total: workItems.length,
       action: 'adapt',
       dryRun: options.dryRun,
     })
 
     const absolutePath = path.join(cwd, sourcePath)
     const content = await readFile(absolutePath, 'utf8')
-    const mapFile = await readMapFile(cwd, sourcePath)
     const translations = new Map<string, TranslationEntry>(Object.entries(mapFile.entries))
     const segments = extractor.extract(content, sourcePath)
     const adapted = adaptContent(content, sourcePath, segments, translations, config.adapt)
@@ -155,7 +161,18 @@ export async function adaptSources(options: AdaptOptions = {}): Promise<AdaptRes
     if (changed && !options.dryRun) {
       await backupFile(cwd, sourcePath, batchId)
       await writeFile(absolutePath, adapted.content, 'utf8')
-      options.onProgress?.({ phase: 'write', path: sourcePath, current: index + 1, total: sourcePaths.length, action: 'adapt' })
+      options.onProgress?.({ phase: 'write', path: sourcePath, current: index + 1, total: workItems.length, action: 'adapt' })
+    }
+
+    if (!options.dryRun) {
+      await writeMapFile(cwd, sourcePath, {
+        ...mapFile,
+        adapt: createMapAdaptMeta(mapFile, {
+          applied: adapted.applied,
+          skipped: adapted.skipped.length,
+          changed,
+        }),
+      })
     }
 
     allSkipped.push(...adapted.skipped)
@@ -170,6 +187,24 @@ export async function adaptSources(options: AdaptOptions = {}): Promise<AdaptRes
 
   options.onProgress?.({ phase: 'done', message: 'Adapt finished' })
   return { files, dryRun: options.dryRun === true, skipped: allSkipped }
+}
+
+async function findAdaptWorkItems(cwd: string, targetPath: string | undefined, includeAll: boolean): Promise<AdaptWorkItem[]> {
+  const mapPaths = await findMapPaths(cwd, targetPath)
+  const workItems: AdaptWorkItem[] = []
+
+  for (const mapPath of mapPaths) {
+    const sourcePath = mapPathToSourcePath(mapPath)
+    const mapFile = await readMapFile(cwd, sourcePath)
+    if (!hasReadyAdaptEntries(mapFile))
+      continue
+    if (isMapAdapted(mapFile))
+      continue
+
+    workItems.push({ sourcePath, mapFile })
+  }
+
+  return includeAll ? workItems : workItems.slice(0, 1)
 }
 
 export function adaptContent(

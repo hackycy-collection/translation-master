@@ -438,6 +438,64 @@ describe('i18n migrate workflow', () => {
     ].join('\n'))
   })
 
+  it('adapts one pending file by default and records completed maps', async () => {
+    const cwd = await createTempProject()
+    const appPath = path.join(cwd, 'src', 'App.vue')
+    const settingsPath = path.join(cwd, 'src', 'Settings.vue')
+    await mkdir(path.dirname(appPath), { recursive: true })
+    await writeFile(appPath, '<template><button>提交</button></template>\n', 'utf8')
+    await writeFile(settingsPath, '<template><button>保存设置</button></template>\n', 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    await approveTranslations({ cwd })
+
+    const first = await adaptSources({ cwd })
+    expect(first.files).toMatchObject([{ sourcePath: 'src/App.vue', changed: true, applied: 1 }])
+    expect(await readFile(appPath, 'utf8')).toContain('$t(\'submit\')')
+    expect(await readFile(settingsPath, 'utf8')).toContain('保存设置')
+
+    const appMap = JSON.parse(await readFile(path.join(cwd, '.tmigrate', 'maps', 'src', 'App.vue.json'), 'utf8')) as {
+      adapt?: { adaptedAt?: string, entryRefs?: string[], applied?: number, changed?: boolean }
+    }
+    expect(appMap.adapt?.adaptedAt).toBeTruthy()
+    expect(appMap.adapt?.entryRefs).toHaveLength(1)
+    expect(appMap.adapt).toMatchObject({ applied: 1, changed: true })
+
+    const statsAfterFirst = await collectMapStats({ cwd })
+    expect(statsAfterFirst.current.adaptReadyMapFiles).toBe(2)
+    expect(statsAfterFirst.current.adaptedMapFiles).toBe(1)
+    expect(statsAfterFirst.current.pendingAdaptMapFiles).toBe(1)
+
+    const second = await adaptSources({ cwd })
+    expect(second.files).toMatchObject([{ sourcePath: 'src/Settings.vue', changed: true, applied: 1 }])
+    expect(await readFile(settingsPath, 'utf8')).toContain('$t(\'saveSettings\')')
+
+    const third = await adaptSources({ cwd })
+    expect(third.files).toHaveLength(0)
+  })
+
+  it('adapts every ready file when requested with all', async () => {
+    const cwd = await createTempProject()
+    const appPath = path.join(cwd, 'src', 'App.vue')
+    const settingsPath = path.join(cwd, 'src', 'Settings.vue')
+    await mkdir(path.dirname(appPath), { recursive: true })
+    await writeFile(appPath, '<template><button>提交</button></template>\n', 'utf8')
+    await writeFile(settingsPath, '<template><button>保存设置</button></template>\n', 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    await approveTranslations({ cwd })
+
+    const result = await adaptSources({ cwd, all: true })
+    expect(result.files).toMatchObject([
+      { sourcePath: 'src/App.vue', changed: true, applied: 1 },
+      { sourcePath: 'src/Settings.vue', changed: true, applied: 1 },
+    ])
+    expect(await readFile(appPath, 'utf8')).toContain('$t(\'submit\')')
+    expect(await readFile(settingsPath, 'utf8')).toContain('$t(\'saveSettings\')')
+  })
+
   it('ignores legacy runtime injection config when adapting script setup', async () => {
     const cwd = await createTempProject()
     const sourcePath = path.join(cwd, 'src', 'views', 'Account.vue')

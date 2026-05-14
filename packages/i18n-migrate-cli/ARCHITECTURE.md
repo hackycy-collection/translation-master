@@ -247,8 +247,12 @@ export default {
 `adapt` 读取已批准 map，把源码中的源语言文案改写为项目 i18n 调用：
 
 ```bash
+tmigrate adapt src
 tmigrate adapt src --dry-run
+tmigrate adapt src --all
 ```
+
+默认 `adapt` 每次只处理下一个待执行文件，并在对应 map 中记录本次已执行的批准条目。`--all` 才会一次性处理所有已批准且 key 已确认的待执行文件。
 
 当前安全改写范围：
 
@@ -309,10 +313,11 @@ tmigrate stats src/modules/order
 
 - map 健康度：总数、可读数、损坏数、当前 map、孤儿 map
 - 当前条目规模：当前条目、活跃条目、已排除条目、孤儿条目
-- 迁移进度：译文覆盖率、已批准比例、可回写比例
-- 工作队列：可回写、待校对、待补译、已跳过、已废弃
+- 迁移进度：译文覆盖率、已批准比例、可回写比例、已 adapt 文件比例
+- 工作队列：可回写、待 adapt、待校对、待补译、已跳过、已废弃
 - 译文来源：glossary / machine / manual
 - 重点文件 Top 5：待补译、待校对或废弃条目最多的当前文件
+- 待 adapt 文件 Top 5：已经批准但尚未执行 `adapt` 的当前文件
 - 孤儿/损坏 Top 5：最需要清理或修复的异常 map
 
 这样可以直接看出：
@@ -428,6 +433,13 @@ tmigrate restore --list
 {
   "version": 2,
   "generatedAt": "2026-05-10T08:00:00Z",
+  "adapt": {
+    "adaptedAt": "2026-05-10T08:10:00Z",
+    "entryRefs": ["e5f6g7h8:submit"],
+    "applied": 1,
+    "skipped": 0,
+    "changed": true
+  },
   "entries": {
     "请输入用户名": {
       "id": "a1b2c3d4",

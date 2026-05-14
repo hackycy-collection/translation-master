@@ -46,6 +46,7 @@ export type {
   FileParser,
   FilterRule,
   Location,
+  MapAdaptMeta,
   MapFile,
   MapStatsBucket,
   MapStatsFile,

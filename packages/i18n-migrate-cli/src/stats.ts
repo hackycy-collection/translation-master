@@ -3,6 +3,7 @@ import { access } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import pc from 'picocolors'
+import { hasReadyAdaptEntries, isMapAdapted } from './adapt-status'
 import { readJsonFile } from './fs-utils'
 import { findMapPaths } from './map-paths'
 import { createMapFile } from './mapping'
@@ -82,10 +83,12 @@ export function formatMapStatsReport(report: MapStatsReport): string {
   lines.push(renderProgress('译文覆盖', translatedEntries, activeEntries))
   lines.push(renderProgress('已批准', report.current.readyToApplyEntries, translatedEntries))
   lines.push(renderProgress('可回写', report.current.readyToApplyEntries, activeEntries))
+  lines.push(renderProgress('已adapt', report.current.adaptedMapFiles, report.current.adaptReadyMapFiles))
   lines.push('')
 
   lines.push(pc.cyan('工作队列'))
   lines.push(renderQueueRow('可回写', report.current.readyToApplyEntries, activeEntries, pc.green))
+  lines.push(renderQueueRow('待adapt', report.current.pendingAdaptMapFiles, report.current.adaptReadyMapFiles, pc.yellow))
   lines.push(renderQueueRow('待校对', report.current.pendingReviewEntries, activeEntries, pc.yellow))
   lines.push(renderQueueRow('待补译', report.current.untranslatedEntries, activeEntries, pc.red))
   lines.push(renderQueueRow('已跳过', report.current.skippedEntries, currentEntries, pc.dim))
@@ -109,6 +112,17 @@ export function formatMapStatsReport(report: MapStatsReport): string {
       lines.push(
         `- ${file.sourcePath} · 待处理 ${formatCount(pending)}`
         + `（补译 ${formatCount(file.untranslatedEntries)}, 校对 ${formatCount(file.pendingReviewEntries)}, 废弃 ${formatCount(file.deprecatedEntries)}）`,
+      )
+    }
+  }
+
+  const pendingAdaptFiles = getPendingAdaptFiles(report.files)
+  if (pendingAdaptFiles.length > 0) {
+    lines.push('')
+    lines.push(pc.cyan('待 adapt 文件 Top 5'))
+    for (const file of pendingAdaptFiles) {
+      lines.push(
+        `- ${file.sourcePath} · 可改写 ${formatCount(file.readyToApplyEntries)} 条`,
       )
     }
   }
@@ -137,7 +151,9 @@ export function formatMapStatsReport(report: MapStatsReport): string {
   if (report.current.pendingReviewEntries > 0)
     lines.push(`- 再校对 ${formatCount(report.current.pendingReviewEntries)} 条译文，然后执行 \`tmigrate approve\`。`)
   if (report.current.readyToApplyEntries > 0)
-    lines.push(`- 当前已有 ${formatCount(report.current.readyToApplyEntries)} 条可回写，执行 \`tmigrate apply\`。`)
+    lines.push(`- 当前已有 ${formatCount(report.current.readyToApplyEntries)} 条可回写，可执行 \`tmigrate adapt\` 逐个改源码，或用 \`tmigrate adapt --all\` 一次性处理。`)
+  if (report.current.pendingAdaptMapFiles > 0)
+    lines.push(`- 还有 ${formatCount(report.current.pendingAdaptMapFiles)} 个文件未执行 adapt。`)
   if (report.current.deprecatedEntries > 0)
     lines.push(`- 有 ${formatCount(report.current.deprecatedEntries)} 条废弃条目，可执行 \`tmigrate scan --clean-deprecated\`。`)
   if (report.orphaned.mapFiles > 0)
@@ -148,6 +164,7 @@ export function formatMapStatsReport(report: MapStatsReport): string {
     report.current.untranslatedEntries === 0
     && report.current.pendingReviewEntries === 0
     && report.current.readyToApplyEntries === 0
+    && report.current.pendingAdaptMapFiles === 0
     && report.current.deprecatedEntries === 0
     && report.orphaned.mapFiles === 0
     && report.invalidFiles.length === 0
@@ -161,6 +178,9 @@ export function formatMapStatsReport(report: MapStatsReport): string {
 function createEmptyBucket(): MapStatsBucket {
   return {
     mapFiles: 0,
+    adaptReadyMapFiles: 0,
+    adaptedMapFiles: 0,
+    pendingAdaptMapFiles: 0,
     entries: 0,
     readyToApplyEntries: 0,
     pendingReviewEntries: 0,
@@ -181,6 +201,8 @@ function summarizeMapFile(
 ): MapStatsFile {
   const stats = createEmptyBucket()
   const entries = Object.values(mapFile.entries)
+  const adaptReady = hasReadyAdaptEntries(mapFile)
+  const adapted = isMapAdapted(mapFile)
   stats.entries = entries.length
 
   for (const entry of entries)
@@ -188,6 +210,9 @@ function summarizeMapFile(
 
   return {
     ...file,
+    adaptReady,
+    adapted,
+    adaptedAt: mapFile.adapt?.adaptedAt,
     totalEntries: entries.length,
     readyToApplyEntries: stats.readyToApplyEntries,
     pendingReviewEntries: stats.pendingReviewEntries,
@@ -224,6 +249,9 @@ function classifyEntry(entry: TranslationEntry, stats: MapStatsBucket): void {
 
 function mergeBucket(target: MapStatsBucket, source: MapStatsFile): void {
   target.mapFiles += 1
+  target.adaptReadyMapFiles += source.adaptReady ? 1 : 0
+  target.adaptedMapFiles += source.adapted ? 1 : 0
+  target.pendingAdaptMapFiles += source.adaptReady && !source.adapted ? 1 : 0
   target.entries += source.totalEntries
   target.readyToApplyEntries += source.readyToApplyEntries
   target.pendingReviewEntries += source.pendingReviewEntries
@@ -251,6 +279,13 @@ function getOrphanFiles(files: MapStatsFile[]): MapStatsFile[] {
   return files
     .filter(file => !file.sourceExists)
     .sort((left, right) => right.totalEntries - left.totalEntries || left.sourcePath.localeCompare(right.sourcePath))
+    .slice(0, FOCUS_FILE_LIMIT)
+}
+
+function getPendingAdaptFiles(files: MapStatsFile[]): MapStatsFile[] {
+  return files
+    .filter(file => file.sourceExists && file.adaptReady && !file.adapted)
+    .sort((left, right) => right.readyToApplyEntries - left.readyToApplyEntries || left.sourcePath.localeCompare(right.sourcePath))
     .slice(0, FOCUS_FILE_LIMIT)
 }
 

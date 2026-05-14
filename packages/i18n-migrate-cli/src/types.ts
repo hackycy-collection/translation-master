@@ -57,7 +57,16 @@ export interface TranslationEntry {
 export interface MapFile {
   version: 2
   generatedAt: string
+  adapt?: MapAdaptMeta
   entries: Record<string, TranslationEntry>
+}
+
+export interface MapAdaptMeta {
+  adaptedAt: string
+  entryRefs: string[]
+  applied: number
+  skipped: number
+  changed: boolean
 }
 
 export interface ScanMetaEntry {
@@ -246,6 +255,7 @@ export interface AdaptOptions {
   cwd?: string
   path?: string
   dryRun?: boolean
+  all?: boolean
   strategy?: 'ast' | 'range'
   onProgress?: (event: WorkflowProgressEvent) => void
 }
@@ -338,6 +348,9 @@ export interface ConvertResult {
 
 export interface MapStatsBucket {
   mapFiles: number
+  adaptReadyMapFiles: number
+  adaptedMapFiles: number
+  pendingAdaptMapFiles: number
   entries: number
   readyToApplyEntries: number
   pendingReviewEntries: number
@@ -351,6 +364,9 @@ export interface MapStatsFile {
   sourcePath: string
   mapPath: string
   sourceExists: boolean
+  adaptReady: boolean
+  adapted: boolean
+  adaptedAt?: string
   totalEntries: number
   readyToApplyEntries: number
   pendingReviewEntries: number
