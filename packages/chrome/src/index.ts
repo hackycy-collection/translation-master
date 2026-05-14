@@ -1,7 +1,7 @@
 import type { BrowserContext, BrowserType, Page } from 'playwright-core'
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, readdir } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
@@ -467,9 +467,28 @@ async function readChromeVersion(executablePath: string): Promise<string> {
 }
 
 async function readWindowsChromeVersion(executablePath: string): Promise<string> {
+  try {
+    return await readWindowsChromeFileVersion(executablePath)
+  }
+  catch (error) {
+    try {
+      const version = await readWindowsChromeDirectoryVersion(executablePath)
+      if (version)
+        return `Google Chrome ${version}`
+    }
+    catch {
+      // Preserve the file-version error because it explains the primary Windows version lookup failure.
+    }
+    throw error
+  }
+}
+
+async function readWindowsChromeFileVersion(executablePath: string): Promise<string> {
   const script = [
     '$ErrorActionPreference = "Stop"',
-    '$item = Get-Item -LiteralPath $args[0]',
+    '$chromePath = $env:CHROME_TRANSLATOR_EXECUTABLE_PATH',
+    'if (-not $chromePath) { throw "Chrome executable path was not provided." }',
+    '$item = Get-Item -LiteralPath $chromePath',
     '$name = $item.VersionInfo.ProductName',
     '$version = $item.VersionInfo.ProductVersion',
     'if (-not $name) { $name = "Google Chrome" }',
@@ -484,12 +503,37 @@ async function readWindowsChromeVersion(executablePath: string): Promise<string>
     'Bypass',
     '-Command',
     script,
-    executablePath,
-  ], { timeout: 10000 })
+  ], {
+    timeout: 10000,
+    env: {
+      ...process.env,
+      CHROME_TRANSLATOR_EXECUTABLE_PATH: executablePath,
+    },
+  })
   const versionText = stdout.trim()
   if (!versionText)
     throw new Error('Chrome executable has no file version.')
   return versionText
+}
+
+async function readWindowsChromeDirectoryVersion(executablePath: string): Promise<string | undefined> {
+  const applicationDir = path.dirname(executablePath)
+  const entries = await readdir(applicationDir, { withFileTypes: true })
+  return entries
+    .filter(entry => entry.isDirectory() && /^\d+\.\d+\.\d+\.\d+$/.test(entry.name))
+    .map(entry => entry.name)
+    .sort(compareVersionDesc)[0]
+}
+
+function compareVersionDesc(a: string, b: string): number {
+  const aParts = a.split('.').map(Number)
+  const bParts = b.split('.').map(Number)
+  for (let index = 0; index < Math.max(aParts.length, bParts.length); index += 1) {
+    const diff = (bParts[index] ?? 0) - (aParts[index] ?? 0)
+    if (diff)
+      return diff
+  }
+  return 0
 }
 
 export function parseChromeMajorVersion(versionText: string): number | undefined {
