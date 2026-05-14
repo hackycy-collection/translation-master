@@ -15,6 +15,7 @@ interface AdaptReplacement {
   start: number
   end: number
   text: string
+  needsVueScriptRuntime?: boolean
 }
 
 interface AdaptFileResult {
@@ -32,6 +33,7 @@ export async function adaptSources(options: AdaptOptions = {}): Promise<AdaptRes
   const cwd = options.cwd ?? process.cwd()
   options.onProgress?.({ phase: 'prepare', message: options.dryRun ? 'Preparing i18n adapt preview' : 'Preparing i18n source adaptation' })
   const config = await loadConfig(cwd)
+  const adaptConfig = resolveAdaptConfig(config.adapt, options)
   const extractor = new Extractor(config)
   const sourcePaths = (await findMapPaths(cwd, options.path)).map(mapPathToSourcePath).sort()
   const batchId = new Date().toISOString()
@@ -54,7 +56,7 @@ export async function adaptSources(options: AdaptOptions = {}): Promise<AdaptRes
     const mapFile = await readMapFile(cwd, sourcePath)
     const translations = new Map<string, TranslationEntry>(Object.entries(mapFile.entries))
     const segments = extractor.extract(content, sourcePath)
-    const adapted = adaptContent(content, sourcePath, segments, translations, config.adapt)
+    const adapted = adaptContent(content, sourcePath, segments, translations, adaptConfig)
     const changed = adapted.content !== content
 
     if (changed && !options.dryRun) {
@@ -86,6 +88,7 @@ export function adaptContent(
 ): AdaptFileResult {
   const replacements: AdaptReplacement[] = []
   const skipped: AdaptSkip[] = []
+  let needsVueScriptRuntime = false
 
   for (const segment of segments) {
     const entry = translations.get(segment.text)
@@ -104,12 +107,17 @@ export function adaptContent(
       continue
     }
 
+    if (replacement.needsVueScriptRuntime)
+      needsVueScriptRuntime = true
     replacements.push(replacement)
   }
 
   let next = content
   for (const replacement of replacements.sort((left, right) => right.start - left.start))
     next = `${next.slice(0, replacement.start)}${replacement.text}${next.slice(replacement.end)}`
+
+  if (needsVueScriptRuntime)
+    next = injectVueScriptRuntime(next, config)
 
   return {
     content: next,
@@ -147,8 +155,18 @@ function replacementForSegment(
       : undefined
   }
 
-  if (segment.context === 'script' && segment.nodeType === 'StringLiteral')
-    return scriptStringReplacement(content, segment, callExpression(config.callee.script, key, params))
+  if (segment.context === 'script' && segment.nodeType === 'StringLiteral') {
+    if (sourcePath.endsWith('.vue') && config.import.script.enabled && !isInsideVueScriptSetup(content, segment.start))
+      return undefined
+
+    const replacement = scriptStringReplacement(content, segment, callExpression(config.callee.script, key, params))
+    return replacement
+      ? {
+          ...replacement,
+          needsVueScriptRuntime: sourcePath.endsWith('.vue') && config.import.script.enabled,
+        }
+      : undefined
+  }
 
   return undefined
 }
@@ -241,8 +259,180 @@ function uniqueParams(params: AdaptParam[]): AdaptParam[] {
   })
 }
 
+function resolveAdaptConfig(config: AdaptConfig, options: AdaptOptions): AdaptConfig {
+  if (options.injectRuntime === undefined)
+    return config
+
+  return {
+    ...config,
+    import: {
+      ...config.import,
+      script: {
+        ...config.import.script,
+        enabled: options.injectRuntime,
+      },
+    },
+  }
+}
+
+function injectVueScriptRuntime(content: string, config: AdaptConfig): string {
+  if (!isIdentifier(config.callee.script))
+    return content
+
+  const setupBlock = findVueScriptBlock(content, true)
+  if (setupBlock)
+    return replaceScriptBlockContent(content, setupBlock, injectRuntimeIntoScript(setupBlock.content, config))
+
+  const scriptBlock = findVueScriptBlock(content, false)
+  if (scriptBlock)
+    return replaceScriptBlockContent(content, scriptBlock, injectRuntimeIntoScript(scriptBlock.content, config))
+
+  return insertScriptSetupBlock(content, injectRuntimeIntoScript('', config))
+}
+
+interface VueScriptBlock {
+  content: string
+  contentStart: number
+  contentEnd: number
+}
+
+const IDENTIFIER_SOURCE = String.raw`[$_\p{L}][$_\p{L}\p{N}]*`
+
+function findVueScriptBlock(content: string, setup: boolean): VueScriptBlock | undefined {
+  const openTagPattern = /<script\b[^>]*>/gi
+  for (const openTag of content.matchAll(openTagPattern)) {
+    const isSetup = /\ssetup(?:[\s=>]|$)/i.test(openTag[0])
+    if (isSetup !== setup)
+      continue
+
+    const contentStart = openTag.index + openTag[0].length
+    const closeTag = /<\/script>/i.exec(content.slice(contentStart))
+    if (!closeTag || closeTag.index === undefined)
+      return undefined
+
+    const contentEnd = contentStart + closeTag.index
+    return {
+      content: content.slice(contentStart, contentEnd),
+      contentStart,
+      contentEnd,
+    }
+  }
+
+  return undefined
+}
+
+function isInsideVueScriptSetup(content: string, index: number): boolean {
+  const setupBlock = findVueScriptBlock(content, true)
+  return Boolean(setupBlock && index >= setupBlock.contentStart && index <= setupBlock.contentEnd)
+}
+
+function replaceScriptBlockContent(content: string, block: VueScriptBlock, nextContent: string): string {
+  const formatted = `\n${nextContent.replace(/^\n+/, '').replace(/\n*$/, '\n')}`
+  return `${content.slice(0, block.contentStart)}${formatted}${content.slice(block.contentEnd)}`
+}
+
+function injectRuntimeIntoScript(content: string, config: AdaptConfig): string {
+  const importLocalName = existingImportLocalName(content, config)
+    ?? config.import.script.localName
+    ?? config.import.script.specifier
+  const withImport = ensureRuntimeImport(content, config, importLocalName)
+
+  if (hasRuntimeBinding(withImport, config.callee.script, importLocalName))
+    return withImport
+
+  return insertAfterImports(withImport, `${runtimeBindingStatement(config.callee.script, importLocalName)}\n`)
+}
+
+function existingImportLocalName(content: string, config: AdaptConfig): string | undefined {
+  const source = escapeRegExp(config.import.script.source)
+  if (config.import.script.importKind === 'default') {
+    const match = new RegExp(`import\\s+(${IDENTIFIER_SOURCE})\\s+from\\s+['"]${source}['"]`, 'u').exec(content)
+    return match?.[1]
+  }
+
+  const importPattern = new RegExp(`import\\s*\\{([^}]+)\\}\\s+from\\s+['"]${source}['"]`, 'g')
+  for (const match of content.matchAll(importPattern)) {
+    const localName = namedImportLocalName(match[1] ?? '', config.import.script.specifier)
+    if (localName)
+      return localName
+  }
+
+  return undefined
+}
+
+function namedImportLocalName(namedImports: string, specifier: string): string | undefined {
+  for (const item of namedImports.split(',')) {
+    const [imported, local] = item.trim().split(/\s+as\s+/)
+    if (imported === specifier)
+      return local?.trim() || imported
+  }
+  return undefined
+}
+
+function ensureRuntimeImport(content: string, config: AdaptConfig, importLocalName: string): string {
+  if (existingImportLocalName(content, config))
+    return content
+
+  return insertAfterImports(content, `${runtimeImportStatement(config, importLocalName)}\n`)
+}
+
+function runtimeImportStatement(config: AdaptConfig, importLocalName: string): string {
+  const { importKind, source, specifier } = config.import.script
+  if (importKind === 'default')
+    return `import ${importLocalName} from '${source}'`
+
+  const namedImport = importLocalName === specifier
+    ? specifier
+    : `${specifier} as ${importLocalName}`
+  return `import { ${namedImport} } from '${source}'`
+}
+
+function runtimeBindingStatement(callee: string, importLocalName: string): string {
+  const binding = callee === 't' ? 't' : `t: ${callee}`
+  return `const { ${binding} } = ${importLocalName}()`
+}
+
+function hasRuntimeBinding(content: string, callee: string, importLocalName: string): boolean {
+  const escapedCallee = escapeRegExp(callee)
+  const escapedImportLocalName = escapeRegExp(importLocalName)
+  const destructured = new RegExp(`\\b(?:const|let|var)\\s*\\{[^}]*\\b(?:t\\s*:\\s*)?${escapedCallee}\\b[^}]*\\}\\s*=\\s*${escapedImportLocalName}\\s*\\(`)
+  const variable = new RegExp(`\\b(?:const|let|var)\\s+${escapedCallee}\\b`)
+  return destructured.test(content) || variable.test(content)
+}
+
+function insertAfterImports(content: string, text: string): string {
+  let lastImportEnd = 0
+  for (const match of content.matchAll(/^import[\s\S]*?from\s+['"][^'"]+['"];?\n?/gm))
+    lastImportEnd = (match.index ?? 0) + match[0].length
+
+  if (lastImportEnd > 0)
+    return `${content.slice(0, lastImportEnd)}${text}${content.slice(lastImportEnd)}`
+
+  return content
+    ? `${text}\n${content.replace(/^\n+/, '')}`
+    : text
+}
+
+function insertScriptSetupBlock(content: string, scriptContent: string): string {
+  const block = `<script setup lang="ts">\n${scriptContent.trimEnd()}\n</script>\n`
+  const templateClose = /<\/template>/i.exec(content)
+  if (!templateClose || templateClose.index === undefined)
+    return `${block}${content}`
+
+  const insertAt = templateClose.index + templateClose[0].length
+  return `${content.slice(0, insertAt)}\n${block}${content.slice(insertAt)}`
+}
+
+function isIdentifier(value: string): boolean {
+  return new RegExp(`^${IDENTIFIER_SOURCE}$`, 'u').test(value)
+}
+
 function quoteString(text: string): string {
   return `'${text.replace(/\\/g, '\\\\').replace(/'/g, '\\\'')}'`
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function skip(sourcePath: string, text: string, key: string | undefined, reason: string, suggestion: string): AdaptSkip {

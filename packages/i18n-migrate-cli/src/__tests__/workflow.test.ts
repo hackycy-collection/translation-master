@@ -232,6 +232,30 @@ describe('i18n migrate workflow', () => {
     expect(source).toBe(`export default {\n  "enterUsername": "请输入用户名",\n  "submit": "提交"\n}\n`)
   })
 
+  it('fails conversion when approved entries conflict on the same locale key', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'Conflict.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, '<template><button>提交</button><button>保存设置</button></template>\n', 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+
+    const mapPath = path.join(cwd, '.tmigrate', 'maps', 'src', 'views', 'Conflict.vue.json')
+    const map = JSON.parse(await readFile(mapPath, 'utf8')) as {
+      entries: Record<string, { approved: boolean, translationApproved?: boolean, keyApproved?: boolean, key?: string }>
+    }
+    for (const entry of Object.values(map.entries)) {
+      entry.approved = true
+      entry.translationApproved = true
+      entry.keyApproved = true
+      entry.key = 'submit'
+    }
+    await writeFile(mapPath, JSON.stringify(map, null, 2), 'utf8')
+
+    await expect(convertMaps({ cwd })).rejects.toThrow('Duplicate locale key "submit"')
+  })
+
   it('supports target-only json conversion and translates approved empty entries on demand', async () => {
     const cwd = await createTempProject()
     const sourcePath = path.join(cwd, 'src', 'views', 'Profile.vue')
@@ -405,6 +429,122 @@ describe('i18n migrate workflow', () => {
       '</template>',
       '<script setup lang="ts">',
       'const title = t(\'accountSecurity\')',
+      '</script>',
+      '',
+    ].join('\n'))
+  })
+
+  it('injects the configured Vue i18n runtime into script setup when enabled', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'Account.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, [
+      '<template><h1>账号安全</h1></template>',
+      '<script setup lang="ts">',
+      'const title = \'账号安全\'',
+      '</script>',
+      '',
+    ].join('\n'), 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    const configPath = path.join(cwd, '.tmigrate', 'config.json')
+    const config = JSON.parse(await readFile(configPath, 'utf8')) as { adapt?: Record<string, unknown> }
+    config.adapt = { import: { script: { enabled: true } } }
+    await writeFile(configPath, JSON.stringify(config, null, 2), 'utf8')
+
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    await approveTranslations({ cwd })
+    await adaptSources({ cwd })
+
+    expect(await readFile(sourcePath, 'utf8')).toBe([
+      '<template><h1>{{ $t(\'accountSecurity\') }}</h1></template>',
+      '<script setup lang="ts">',
+      'import { useI18n } from \'vue-i18n\'',
+      'const { t } = useI18n()',
+      '',
+      'const title = t(\'accountSecurity\')',
+      '</script>',
+      '',
+    ].join('\n'))
+  })
+
+  it('supports custom runtime import source, imported name, local name, and script callee', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'CustomRuntime.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, [
+      '<template><h1>账号安全</h1></template>',
+      '<script setup lang="ts">',
+      'const title = \'账号安全\'',
+      '</script>',
+      '',
+    ].join('\n'), 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    const configPath = path.join(cwd, '.tmigrate', 'config.json')
+    const config = JSON.parse(await readFile(configPath, 'utf8')) as { adapt?: Record<string, unknown> }
+    config.adapt = {
+      callee: { script: 'translate' },
+      import: {
+        script: {
+          enabled: true,
+          source: '@/composables/i18n',
+          specifier: 'createI18n',
+          localName: 'useAppI18n',
+          importKind: 'default',
+        },
+      },
+    }
+    await writeFile(configPath, JSON.stringify(config, null, 2), 'utf8')
+
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    await approveTranslations({ cwd })
+    await adaptSources({ cwd })
+
+    expect(await readFile(sourcePath, 'utf8')).toBe([
+      '<template><h1>{{ $t(\'accountSecurity\') }}</h1></template>',
+      '<script setup lang="ts">',
+      'import useAppI18n from \'@/composables/i18n\'',
+      'const { t: translate } = useAppI18n()',
+      '',
+      'const title = translate(\'accountSecurity\')',
+      '</script>',
+      '',
+    ].join('\n'))
+  })
+
+  it('does not inject top-level useI18n into normal Vue script blocks', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'Options.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, [
+      '<template><h1>账号安全</h1></template>',
+      '<script lang="ts">',
+      'const title = \'账号安全\'',
+      'export default { name: \'OptionsPage\' }',
+      '</script>',
+      '',
+    ].join('\n'), 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    await approveTranslations({ cwd })
+
+    const result = await adaptSources({ cwd, injectRuntime: true })
+
+    expect(result.skipped).toEqual([
+      expect.objectContaining({
+        sourcePath: 'src/views/Options.vue',
+        text: '账号安全',
+        key: 'accountSecurity',
+        reason: 'unsupported-context',
+      }),
+    ])
+    expect(await readFile(sourcePath, 'utf8')).toBe([
+      '<template><h1>{{ $t(\'accountSecurity\') }}</h1></template>',
+      '<script lang="ts">',
+      'const title = \'账号安全\'',
+      'export default { name: \'OptionsPage\' }',
       '</script>',
       '',
     ].join('\n'))

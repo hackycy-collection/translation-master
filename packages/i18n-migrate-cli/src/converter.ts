@@ -30,6 +30,7 @@ interface LocaleOutput {
   locale: string
   outputPath: string
   entries: Record<string, string>
+  entrySources: Map<string, string>
   sourceMaps: Set<string>
 }
 
@@ -85,14 +86,14 @@ export async function convertMaps(options: ConvertOptions = {}): Promise<Convert
       if (runtime.includeSourceLocale) {
         const output = ensureOutput(outputs, runtime, sourcePath, runtime.sourceLocale)
         for (const [sourceText, entry] of translatedEntries)
-          output.entries[entryLocaleKey(sourceText, entry, runtime)] = messageWithNamedParams(sourceText)
+          setLocaleEntry(output, entryLocaleKey(sourceText, entry, runtime), messageWithNamedParams(sourceText), sourceText, mapPath)
         output.sourceMaps.add(mapPath)
       }
 
       const targetOutput = ensureOutput(outputs, runtime, sourcePath, runtime.targetLocale)
       for (const [sourceText, entry] of translatedEntries) {
         if (entry.translation)
-          targetOutput.entries[entryLocaleKey(sourceText, entry, runtime)] = messageWithNamedParams(entry.translation)
+          setLocaleEntry(targetOutput, entryLocaleKey(sourceText, entry, runtime), messageWithNamedParams(entry.translation), sourceText, mapPath)
       }
       targetOutput.sourceMaps.add(mapPath)
     }
@@ -237,10 +238,27 @@ function ensureOutput(
     locale,
     outputPath,
     entries: {},
+    entrySources: new Map(),
     sourceMaps: new Set(),
   }
   outputs.set(outputPath, output)
   return output
+}
+
+function setLocaleEntry(output: LocaleOutput, key: string, value: string, sourceText: string, mapPath: string): void {
+  const owner = `${mapPath}:${sourceText}`
+  const previousOwner = output.entrySources.get(key)
+  if (previousOwner && previousOwner !== owner) {
+    throw new Error([
+      `Duplicate locale key "${key}" in ${output.outputPath}.`,
+      `Existing entry: ${previousOwner}.`,
+      `Conflicting entry: ${owner}.`,
+      'Please assign a unique key before converting.',
+    ].join(' '))
+  }
+
+  output.entries[key] = value
+  output.entrySources.set(key, owner)
 }
 
 function localeOutputPath(options: ConvertRuntimeOptions, sourcePath: string, locale: string): string {

@@ -73,6 +73,7 @@ const DEFAULT_ADAPT_CONFIG: AdaptConfig = {
       enabled: false,
       source: 'vue-i18n',
       specifier: 'useI18n',
+      importKind: 'named',
     },
   },
 }

@@ -148,12 +148,15 @@ export function createCli(options: CreateCliOptions): Command {
     .description('Rewrite approved source text into project i18n calls.')
     .option('--dry-run', 'print a diff without writing files')
     .option('--strategy <strategy>', 'rewrite strategy: ast, range')
-    .action(async (targetPath: string | undefined, command: { dryRun?: boolean, strategy?: string }) => {
+    .option('--inject-runtime', 'auto inject the configured script i18n runtime when script calls are generated')
+    .option('--no-inject-runtime', 'disable configured script i18n runtime injection for this run')
+    .action(async (targetPath: string | undefined, command: { dryRun?: boolean, strategy?: string, injectRuntime?: boolean }) => {
       const progress = createWorkflowProgressRenderer('adapt')
       const result = await adaptSources({
         path: targetPath,
         dryRun: command.dryRun,
         strategy: normalizeAdaptStrategy(command.strategy),
+        injectRuntime: command.injectRuntime,
         onProgress: progress.update,
       })
       progress.stop('Adapt finished.')

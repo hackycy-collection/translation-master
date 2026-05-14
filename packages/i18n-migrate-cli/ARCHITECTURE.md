@@ -1,10 +1,13 @@
 # @translation-master/i18n-migrate-cli 架构
 
-> 扫描前端项目源码，按 `sourceLocale` 提取可翻译文本并翻译为目标语言，作为 i18n 的快速替代方案。
+> 扫描前端项目源码，按 `sourceLocale` 提取可翻译文本，生成可审核 map，再导出 locale 资源或把源码改写为项目约定的 i18n 调用。
 
 ## 背景
 
-中文前端项目需要快速上线国际版，传统 i18n 方案（提取 locale 文件、包裹 t() 函数、适配各处调用）工期长、改动大。本工具提供一种**源码级直接翻译**的过渡方案：扫描项目中的源文件，将中文文本替换为英文翻译，以最小改动实现界面英文化。
+中文前端项目需要快速上线国际版，传统 i18n 方案（提取 locale 文件、包裹 t() 函数、适配各处调用）工期长、改动大。本工具现在走双轨：
+
+1. **i18n 迁移模式**：`scan -> approve -> convert -> adapt`，用持久化 key 生成 locale，并把源码改写为 `$t(key)` / `t(key)`。
+2. **legacy 直接翻译模式**：`scan -> approve -> apply`，把已确认译文直接回写到源码，适合快速英文化或临时过渡。
 
 同一套流程也支持反向场景，例如 playground 中的英文转中文迁移演练。
 
@@ -33,12 +36,18 @@
   └───┬───┘
       │
 ┌─────▼─────┐
-│ Replacer  │  读取最终映射，按源码区间回写源文件
+│ Approve   │  确认 translation 和 i18n key
 └─────┬─────┘
       │
-┌─────▼─────┐
-│ Reporter  │  生成变更报告 / diff
-└───────────┘
+  ┌───┴─────────┐
+  ▼             ▼
+Convert       Adapt
+生成 locale    改写为 $t()/t()
+  │             │
+  ▼             ▼
+语言包文件      源码 + 可选运行时注入
+
+legacy: approve 后也可以走 apply，直接把原文替换为译文。
 ```
 
 ## `.tmigrate` 目录结构
@@ -133,7 +142,7 @@ tmigrate init --no-overwrite
 
 如果 `.tmigrate/` 已存在，默认会提示是否覆盖。`--no-overwrite` 只创建缺失的文件，不覆盖已有配置。
 
-## 两阶段工作流
+## 工作流
 
 ### 阶段一：扫描 + 翻译
 
@@ -185,7 +194,100 @@ Node 端本地翻译会通过 `@translation-master/node` 收敛 Hugging Face 的
 
 当配置为 `translator: "api"` 且提供 `translatorOptions.endpoint` 时，终端仍会展示扫描、翻译批次和写入进度，但不会出现模型加载提示。
 
-### 阶段二：人工确认 + 回写
+### 阶段二：人工确认
+
+开发者校对映射文件中的 `translation` 和 `key`。`translationApproved` 和 `keyApproved` 都确认后，`approved: true` 才表示该条目可以用于 locale 导出和源码改写。
+
+```bash
+tmigrate approve --dry-run
+tmigrate approve --path src/modules/order
+tmigrate approve
+```
+
+### 阶段三：转换为 locale 语言包
+
+`convert` 命令读取 `.tmigrate/maps/`，把分片 map 投影成传统前端语言包。它不修改源码，也不依赖 `apply`：
+
+```bash
+tmigrate convert src --format ts --namespace admin
+tmigrate convert src --output-dir locales/langs --target-only
+tmigrate convert src --translate-missing
+tmigrate convert src --no-translate-missing
+```
+
+默认输出目录是 `locales/langs`，路径形态为：
+
+```text
+源文件:  src/components/Table.vue
+源包:    locales/langs/zh/admin/components/Table.ts
+目标包:  locales/langs/en/admin/components/Table.ts
+```
+
+生成对象是平铺字典，key 来自 map 中持久化的英文语义 key：
+
+```ts
+export default {
+  "submit": "提交"
+}
+```
+
+转换规则：
+
+- 只转换 `approved: true`、未 `skip`、未 `deprecated`，且已确认 key 的条目。
+- 源语言包值为原文，目标语言包值为 map 中 `translation`。
+- `json` 输出纯 JSON；`js` / `ts` 输出稳定的 `export default {}`。
+- `--namespace` 会插入到 `<locale>/` 下一级，用于避开既有语言包。
+- 如果同一个输出文件中出现重复 key，`convert` 会失败并报告冲突来源，要求先人工改 key。
+- 如果开启 `--translate-missing`，已批准但译文为空的条目会复用 scan 的翻译配置、术语表和翻译器补译后再输出。
+
+当 `.tmigrate/config.json` 中配置了 `convert.outputDir`，`loadConfig` 会把该目录加入扫描排除规则，避免生成的 locale 文件再次被 `scan` 处理。
+
+### 阶段四：改写源码为 i18n 调用
+
+`adapt` 读取已批准 map，把源码中的源语言文案改写为项目 i18n 调用：
+
+```bash
+tmigrate adapt src --dry-run
+tmigrate adapt src --inject-runtime
+```
+
+当前安全改写范围：
+
+- Vue template 文本：`提交` -> `{{ $t('submit') }}`
+- Vue 静态属性：`tab="消费记录"` -> `:tab="$t('consumptionRecords')"`
+- Vue `<script setup>` / TS / JS 字符串：`'账号安全'` -> `t('accountSecurity')`
+- Vue template 混合插值：`{{ user.name }} 有 {{ stats.total }} 条记录` -> `{{ $t('userRecords', { userName: user.name, statsTotal: stats.total }) }}`
+
+当 `adapt.import.script.enabled` 或 `--inject-runtime` 开启时，Vue `<script setup>` 中生成 `t(...)` 后会自动补配置化运行时：
+
+```ts
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+```
+
+导入来源、导入名、本地名和 import kind 都来自配置：
+
+```jsonc
+{
+  "adapt": {
+    "callee": { "script": "translate" },
+    "import": {
+      "script": {
+        "enabled": true,
+        "source": "@/composables/i18n",
+        "specifier": "createI18n",
+        "localName": "useAppI18n",
+        "importKind": "default"
+      }
+    }
+  }
+}
+```
+
+普通 Vue `<script>` 暂不自动注入顶层 `useI18n()`，因为 Options API 需要更细的 AST 策略。开启 runtime 注入时，普通 `<script>` 里的脚本文案会跳过并报告，避免生成不可用代码；模板仍会正常改写为 `$t(...)`。
+
+### 阶段五：legacy 人工确认 + 直接回写
 
 开发者校对映射文件中的翻译结果（设置 `approved: true` 或修改 `translation`），确认后回写源文件。
 
@@ -211,7 +313,7 @@ tmigrate apply
 
 这个策略避免了 `const title = '账号安全'` 回写为 `const title = 'Account's secure.'` 这类编译错误，也覆盖了 HTML、JSON、CSS、YAML 中译文特殊字符造成的结构破坏。
 
-### 阶段三：统计与盘点
+### 阶段六：统计与盘点
 
 `stats` 命令只读取 `.tmigrate/maps/`，不修改任何文件，用来快速判断迁移进度和清理优先级。
 
@@ -245,44 +347,6 @@ tmigrate stats src/modules/order
 - 有没有残留的孤儿 map 需要删除
 
 注意这里统计的是 **map 条目数**，不是源码里重复出现的文本命中次数。因为同一个原文在同一文件里通常只保留一个条目，统计命中次数会误导进度判断。
-
-### 阶段四：转换为 locale 语言包
-
-`convert` 命令读取 `.tmigrate/maps/`，把分片 map 投影成传统前端语言包。它不修改源码，也不依赖 `apply`：
-
-```bash
-tmigrate convert src --format ts --namespace admin
-tmigrate convert src --output-dir locales/langs --target-only
-tmigrate convert src --translate-missing
-tmigrate convert src --no-translate-missing
-```
-
-默认输出目录是 `locales/langs`，路径形态为：
-
-```text
-源文件:  src/components/Table.vue
-源包:    locales/langs/zh/admin/components/Table.ts
-目标包:  locales/langs/en/admin/components/Table.ts
-```
-
-生成对象是平铺字典：
-
-```ts
-export default {
-  "提交": "Submit"
-}
-```
-
-转换规则：
-
-- 只转换 `approved: true`、未 `skip`、未 `deprecated` 的条目。
-- 源语言包值为原文，目标语言包值为 map 中 `translation`。
-- `json` 输出纯 JSON；`js` / `ts` 输出稳定的 `export default {}`。
-- `--namespace` 会插入到 `<locale>/` 下一级，用于避开既有语言包。
-- 如果多个 map 映射到同一个输出文件，后处理的 key 会覆盖同名 key。
-- 如果开启 `--translate-missing`，已批准但译文为空的条目会复用 scan 的翻译配置、术语表和翻译器补译后再输出。
-
-当 `.tmigrate/config.json` 中配置了 `convert.outputDir`，`loadConfig` 会把该目录加入扫描排除规则，避免生成的 locale 文件再次被 `scan` 处理。
 
 ### 回滚
 
@@ -333,6 +397,33 @@ tmigrate restore --list
     { "type": "min-length", "value": 2 }
   ],
   "translator": "local",
+  "convert": {
+    "outputDir": "locales/langs",
+    "format": "json",
+    "includeSourceLocale": true,
+    "translateMissing": false,
+    "legacyTextKey": false
+  },
+  "adapt": {
+    "callee": {
+      "vue": "$t",
+      "script": "t",
+      "default": "t"
+    },
+    "keyReference": {
+      "mode": "local",
+      "separator": "."
+    },
+    "import": {
+      "script": {
+        "enabled": false,
+        "source": "vue-i18n",
+        "specifier": "useI18n",
+        "localName": "useI18n",
+        "importKind": "named"
+      }
+    }
+  },
   "translatorOptions": {
     "modelBaseUrl": "https://cdn.example.com/models",
     "apiKey": "",
@@ -359,6 +450,11 @@ tmigrate restore --list
       "translation": "Please enter your username",
       "translationSource": "machine",
       "approved": false,
+      "translationApproved": false,
+      "key": "enterUsername",
+      "keySource": "generated",
+      "keyApproved": false,
+      "keyCandidates": ["enterUsername"],
       "skip": false,
       "location": { "line": 12, "column": 8, "context": "template" }
     },
@@ -367,6 +463,11 @@ tmigrate restore --list
       "translation": "Submit",
       "translationSource": "glossary",
       "approved": true,
+      "translationApproved": true,
+      "key": "submit",
+      "keySource": "generated",
+      "keyApproved": true,
+      "keyCandidates": ["submit"],
       "skip": false,
       "location": { "line": 28, "column": 12, "context": "template" }
     }
@@ -381,7 +482,12 @@ tmigrate restore --list
 | `id` | `string` | 稳定 ID，由 `hash(text + filePath)` 生成。不依赖行号，保证增量扫描时 ID 稳定。源文本微小改动时可通过 fuzzy matching 迁移旧 ID |
 | `translation` | `string` | 翻译结果，可人工修改 |
 | `translationSource` | `string` | 翻译来源：`"machine"`（机器翻译）、`"glossary"`（术语表命中）、`"manual"`（人工填写）。术语表命中的条目可自动 approved |
-| `approved` | `boolean` | `false` 时 `apply` 会跳过，需手动改为 `true`。当 `translation` 被机器重新翻译时，自动重置为 `false` |
+| `approved` | `boolean` | 统一可迁移标记。`convert`、`adapt`、`apply` 都只消费已批准条目；当 `translation` 被机器重新翻译或 key 变化时会重置为 `false` |
+| `translationApproved` | `boolean` | 翻译是否已确认。缺省时兼容旧 map 的 `approved` |
+| `key` | `string` | locale 字段名和源码改写使用的 i18n key |
+| `keySource` | `string` | key 来源：`"generated"` 或 `"manual"` |
+| `keyApproved` | `boolean` | key 是否已确认。`convert` / `adapt` 需要 key 已确认 |
+| `keyCandidates` | `string[]` | 自动生成的候选 key，供人工选择或改写 |
 | `skip` | `boolean` | 标记为 `true` 则永久跳过该条目（如无需翻译的枚举值） |
 | `location` | `Location` | 该文本在当前文件中的位置（每个 map 文件只记录本文件内的出现） |
 | `context` | `string` | 出现位置的上下文类型，影响过滤规则的行为 |
@@ -782,7 +888,7 @@ pnpm --dir playground exec tmigrate scan src/i18n-migrate-en-demo --incremental 
 
 机器翻译对短 UI 文本表现不佳（“确定” → “OK” vs “Confirm” vs “Determine”）。缓解措施：
 
-- 两阶段工作流允许人工校对
+- 分阶段工作流允许人工校对 translation 和 key
 - 术语表（`glossary.json`）高频词预设翻译，命中自动 approved
 - `translationSource` 字段区分翻译来源，术语表命中无需人工确认
 - 映射文件可跨项目复用
@@ -797,10 +903,19 @@ pnpm --dir playground exec tmigrate scan src/i18n-migrate-en-demo --incremental 
 
 ### 插值破坏
 
-直接翻译含插值的字符串会破坏表达式。缓解措施：
+直接翻译或改写含插值的字符串会破坏表达式。缓解措施：
 
 - 占位符保护机制
 - 源码区间替换保证只改命中的文本范围
+- `convert` 输出 `{param}` 消息，`adapt` 生成对应参数对象
+
+### key 冲突
+
+多个条目使用同一个 locale key 会导致语言包字段覆盖。缓解措施：
+
+- `scan` 为同文件冲突 key 自动追加短 hash
+- `convert` 发现同一输出文件重复 key 时直接失败并报告冲突来源
+- map 中保留 `keyCandidates`，支持人工改 key 后再批准
 
 ### 不可逆
 

@@ -49,7 +49,7 @@ pnpm exec tmigrate restore
 
 ## 工作流
 
-`tmigrate` 采用两阶段流程，避免机器翻译结果直接污染源文件：
+`tmigrate` 采用可审核的分阶段流程，避免机器翻译结果直接污染源文件：
 
 1. `scan` 扫描源码，提取源语言文本，结合术语表和翻译器生成 `.tmigrate/maps/**/*.json`。
 2. 开发者校对映射文件，修改 `translation`、`key`，并通过 `approve` 确认翻译和 key。
@@ -221,7 +221,7 @@ export default {
 | `--legacy-text-key` | 兼容旧模式，继续使用原文作为 locale key |
 | `--dry-run` | 只预览将生成的文件，不写入 |
 
-默认只转换 `approved: true`、未标记 `skip`、未标记 `deprecated`，且已确认 key 的条目。如果多个 map 最终落到同一个 locale 文件，后处理的条目会覆盖同名 key。
+默认只转换 `approved: true`、未标记 `skip`、未标记 `deprecated`，且已确认 key 的条目。如果多个条目最终落到同一个 locale 文件并产生同名 key，`convert` 会直接失败并报告冲突来源，避免静默覆盖语言包字段。
 
 ### `adapt`
 
@@ -232,6 +232,7 @@ tmigrate adapt src
 tmigrate adapt src --dry-run
 tmigrate adapt src/components
 tmigrate adapt src --strategy ast
+tmigrate adapt src --inject-runtime
 ```
 
 默认改写形式：
@@ -249,6 +250,45 @@ tmigrate adapt src --strategy ast
 | `[path]` | 只改写指定源文件或目录对应的 map |
 | `--dry-run` | 只打印 diff，不写入源码 |
 | `--strategy <strategy>` | 改写策略：`ast`、`range`，当前默认使用安全范围改写 |
+| `--inject-runtime` | 本次执行自动注入配置中的 script i18n runtime |
+| `--no-inject-runtime` | 本次执行禁用配置中的 script i18n runtime 注入 |
+
+当 `adapt.import.script.enabled` 为 `true`，或本次执行传入 `--inject-runtime` 时，Vue `<script setup>` 中生成 `t('key')` 后会自动补运行时接入。例如默认配置会插入：
+
+```ts
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+```
+
+导入语句完全可配置。比如：
+
+```jsonc
+{
+  "adapt": {
+    "callee": { "script": "translate" },
+    "import": {
+      "script": {
+        "enabled": true,
+        "source": "@/composables/i18n",
+        "specifier": "createI18n",
+        "localName": "useAppI18n",
+        "importKind": "default"
+      }
+    }
+  }
+}
+```
+
+会生成：
+
+```ts
+import useAppI18n from '@/composables/i18n'
+
+const { t: translate } = useAppI18n()
+```
+
+运行时注入当前只自动处理 Vue `<script setup>`。如果文件只有普通 `<script>`，模板里的 `$t(...)` 仍会正常改写，但 script 字符串会跳过并报告，需要后续用 Options API 专门策略处理，避免在模块顶层生成不可用的 `useI18n()` 调用。
 
 #### 回写转义策略
 
@@ -394,7 +434,9 @@ tmigrate restore
       "script": {
         "enabled": false,
         "source": "vue-i18n",
-        "specifier": "useI18n"
+        "specifier": "useI18n",
+        "localName": "useI18n",
+        "importKind": "named"
       }
     }
   },
@@ -482,31 +524,31 @@ src/views/Login.vue
   "generatedAt": "2026-05-10T08:00:00Z",
   "entries": {
 	    "请输入用户名": {
-	      "id": "a1b2c3d4",
-	      "translation": "Please enter your username",
-	      "translationSource": "machine",
-	      "approved": false,
-	      "translationApproved": false,
-	      "key": "enterUsername",
-	      "keySource": "generated",
-	      "keyApproved": false,
-	      "keyCandidates": ["enterUsername"],
-	      "skip": false,
-	      "location": { "line": 12, "column": 8, "context": "template" }
-	    },
-	    "提交": {
-	      "id": "e5f6g7h8",
-	      "translation": "Submit",
-	      "translationSource": "glossary",
-	      "approved": true,
-	      "translationApproved": true,
-	      "key": "submit",
-	      "keySource": "generated",
-	      "keyApproved": true,
-	      "keyCandidates": ["submit"],
-	      "skip": false,
-	      "location": { "line": 28, "column": 12, "context": "template" }
-	    }
+      "id": "a1b2c3d4",
+      "translation": "Please enter your username",
+      "translationSource": "machine",
+      "approved": false,
+      "translationApproved": false,
+      "key": "enterUsername",
+      "keySource": "generated",
+      "keyApproved": false,
+      "keyCandidates": ["enterUsername"],
+      "skip": false,
+      "location": { "line": 12, "column": 8, "context": "template" }
+    },
+    "提交": {
+      "id": "e5f6g7h8",
+      "translation": "Submit",
+      "translationSource": "glossary",
+      "approved": true,
+      "translationApproved": true,
+      "key": "submit",
+      "keySource": "generated",
+      "keyApproved": true,
+      "keyCandidates": ["submit"],
+      "skip": false,
+      "location": { "line": 28, "column": 12, "context": "template" }
+    }
   }
 }
 ```
@@ -574,13 +616,13 @@ API 请求体格式：
 除 CLI 外，也可以在 Node.js 中直接调用迁移能力：
 
 ```ts
-	import {
-	  adaptSources,
-	  applyTranslations,
-	  convertMaps,
-	  initGlossary,
-	  initProject,
-	  scanProject,
+import {
+  adaptSources,
+  applyTranslations,
+  convertMaps,
+  initGlossary,
+  initProject,
+  scanProject,
 } from '@translation-master/i18n-migrate-cli'
 
 await initProject({ cwd: process.cwd(), from: 'zh', to: 'en', overwrite: false })

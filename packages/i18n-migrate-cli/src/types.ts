@@ -136,6 +136,8 @@ export interface AdaptImportConfig {
     enabled: boolean
     source: string
     specifier: string
+    localName?: string
+    importKind: 'named' | 'default'
   }
 }
 
@@ -238,6 +240,7 @@ export interface AdaptOptions {
   path?: string
   dryRun?: boolean
   strategy?: 'ast' | 'range'
+  injectRuntime?: boolean
   onProgress?: (event: WorkflowProgressEvent) => void
 }
 
