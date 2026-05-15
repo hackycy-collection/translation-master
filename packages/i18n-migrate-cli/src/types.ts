@@ -147,6 +147,7 @@ export interface AdaptRuntimeImportConfig {
 export interface AdaptVueRuntimeConfig {
   import: AdaptRuntimeImportConfig
   autoImport: boolean
+  skipCompilerMacros: string[]
 }
 
 export interface AdaptScriptRuntimeConfig {

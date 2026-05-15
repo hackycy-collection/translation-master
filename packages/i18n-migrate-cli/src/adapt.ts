@@ -49,9 +49,16 @@ interface VueSetupRuntime {
   block: ScriptBlockInfo
   callee: string
   useI18nCallee: string
+  skippedCompilerMacros: CompilerMacroRange[]
   hasUseI18nBinding: boolean
   bindingInserted: boolean
   importInserted: boolean
+}
+
+interface CompilerMacroRange {
+  name: string
+  start: number
+  end: number
 }
 
 interface VueScriptRuntime {
@@ -234,6 +241,11 @@ export function adaptContent(
       continue
     }
 
+    if (shouldSkipVueCompilerMacro(segment, runtimePlan)) {
+      skipped.push(skip(sourcePath, segment.text, entry.key, 'vue-compiler-macro', 'Compiler macro arguments are hoisted by Vue; rewrite this occurrence manually or remove it from adapt.runtime.vue.skipCompilerMacros.'))
+      continue
+    }
+
     const key = keyReference(sourcePath, entry.key, config)
     const replacement = replacementForSegment(content, sourcePath, segment, entry, config, runtimePlan)
     if (!replacement) {
@@ -407,6 +419,7 @@ function createVueScriptRuntimePlan(content: string, sourcePath: string, config:
       block,
       callee,
       useI18nCallee,
+      skippedCompilerMacros: collectSkippedCompilerMacroRanges(block, config.runtime.vue.skipCompilerMacros),
       hasUseI18nBinding: Boolean(existingBinding),
       bindingInserted: false,
       importInserted: false,
@@ -496,6 +509,37 @@ function scriptCalleeForSegment(
   }
 
   return undefined
+}
+
+function shouldSkipVueCompilerMacro(segment: TextSegment, runtimePlan: ScriptRuntimePlan): boolean {
+  if (segment.context !== 'script' || !runtimePlan.vueScriptSetup)
+    return false
+
+  return runtimePlan.vueScriptSetup.skippedCompilerMacros.some(range => segment.start >= range.start && segment.end <= range.end)
+}
+
+function collectSkippedCompilerMacroRanges(block: ScriptBlockInfo, names: string[]): CompilerMacroRange[] {
+  if (!block.ast || names.length === 0)
+    return []
+
+  const skippedNames = new Set(names)
+  const ranges: CompilerMacroRange[] = []
+  visit(block.ast, (node) => {
+    if (node.type !== 'CallExpression' || typeof node.start !== 'number' || typeof node.end !== 'number')
+      return
+
+    const name = identifierName(node.callee)
+    if (!name || !skippedNames.has(name))
+      return
+
+    ranges.push({
+      name,
+      start: block.start + node.start,
+      end: block.start + node.end,
+    })
+  })
+
+  return ranges
 }
 
 function ensureVueScriptSetupRuntime(

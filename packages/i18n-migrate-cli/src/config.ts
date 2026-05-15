@@ -90,6 +90,15 @@ const DEFAULT_ADAPT_CONFIG: AdaptConfig = {
         named: 'useI18n',
       },
       autoImport: true,
+      skipCompilerMacros: [
+        'defineProps',
+        'defineEmits',
+        'defineExpose',
+        'defineOptions',
+        'defineSlots',
+        'defineModel',
+        'withDefaults',
+      ],
     },
     script: {
       import: {
@@ -188,6 +197,7 @@ function resolveVueRuntimeConfig(input?: AdaptVueRuntimeInput): AdaptConfig['run
   const legacy = runtime as { importSource?: string, useI18n?: string }
   return {
     autoImport: runtime.autoImport ?? DEFAULT_ADAPT_CONFIG.runtime.vue.autoImport,
+    skipCompilerMacros: runtime.skipCompilerMacros ?? DEFAULT_ADAPT_CONFIG.runtime.vue.skipCompilerMacros,
     import: {
       ...DEFAULT_ADAPT_CONFIG.runtime.vue.import,
       ...runtime.import,

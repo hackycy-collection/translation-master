@@ -404,7 +404,8 @@ tmigrate restore
           "source": "vue-i18n",
           "named": "useI18n"
         },
-        "autoImport": true
+        "autoImport": true,
+        "skipCompilerMacros": ["defineProps", "defineEmits", "defineExpose", "defineOptions", "defineSlots", "defineModel", "withDefaults"]
       },
       "script": {
         "import": {
@@ -470,6 +471,7 @@ tmigrate restore
 | `keyReference.separator` | `full` 模式下 key 片段的连接符，默认 `.` |
 | `runtime.vue.import` | 自动注入 Vue i18n 运行时的导入来源和导入名，默认从 `vue-i18n` 导入 `useI18n` |
 | `runtime.vue.autoImport` | 是否在 Vue `<script setup>` 或 `setup()` 中自动注入 `useI18n()` |
+| `runtime.vue.skipCompilerMacros` | Vue `<script setup>` 中需要跳过回写的编译宏调用名，默认包含 Vue 3 常用编译宏 |
 | `runtime.script.import` | 普通 TS/JS 文件自动注入 `t` 的导入配置，例如从 `@/i18n` 导入具名方法 `t` |
 
 `translatorOptions` 会根据不同翻译后端生效：

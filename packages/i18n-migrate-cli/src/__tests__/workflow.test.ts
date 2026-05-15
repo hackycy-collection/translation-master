@@ -507,6 +507,62 @@ describe('i18n migrate workflow', () => {
     ].join('\n'))
   })
 
+  it('skips common Vue compiler macros by default when adapting script setup strings', async () => {
+    const cwd = await createTempProject()
+    const sourcePath = path.join(cwd, 'src', 'views', 'MacroProps.vue')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, [
+      '<script setup lang="ts">',
+      'const props = defineProps({',
+      '  title: { type: String, default: \'属性标题\' },',
+      '})',
+      'const defaults = withDefaults(defineProps<{ label?: string }>(), {',
+      '  label: \'默认标签\',',
+      '})',
+      'const title = \'账号安全\'',
+      '</script>',
+      '',
+    ].join('\n'), 'utf8')
+
+    await initProject({ cwd, overwrite: false, from: 'zh', to: 'en' })
+    await scanProject({ cwd, path: 'src', translator: new EchoTranslator() })
+    const mapPath = path.join(cwd, '.tmigrate', 'maps', 'src', 'views', 'MacroProps.vue.json')
+    const map = JSON.parse(await readFile(mapPath, 'utf8')) as {
+      entries: Record<string, { approved: boolean, translationApproved?: boolean, keyApproved?: boolean, key?: string }>
+    }
+    map.entries['属性标题']!.key = 'propTitle'
+    map.entries['默认标签']!.key = 'defaultLabel'
+    map.entries['账号安全']!.key = 'accountSecurity'
+    for (const entry of Object.values(map.entries)) {
+      entry.approved = true
+      entry.translationApproved = true
+      entry.keyApproved = true
+    }
+    await writeFile(mapPath, JSON.stringify(map, null, 2), 'utf8')
+
+    const result = await adaptSources({ cwd })
+
+    expect(result.files).toMatchObject([{ changed: true, applied: 1 }])
+    expect(result.skipped).toMatchObject([
+      { text: '属性标题', key: 'propTitle', reason: 'vue-compiler-macro' },
+      { text: '默认标签', key: 'defaultLabel', reason: 'vue-compiler-macro' },
+    ])
+    expect(await readFile(sourcePath, 'utf8')).toBe([
+      '<script setup lang="ts">',
+      'import { useI18n } from \'vue-i18n\'',
+      'const { t } = useI18n()',
+      'const props = defineProps({',
+      '  title: { type: String, default: \'属性标题\' },',
+      '})',
+      'const defaults = withDefaults(defineProps<{ label?: string }>(), {',
+      '  label: \'默认标签\',',
+      '})',
+      'const title = t(\'views.MacroProps.accountSecurity\')',
+      '</script>',
+      '',
+    ].join('\n'))
+  })
+
   it('adapts one pending file by default and records completed maps', async () => {
     const cwd = await createTempProject()
     const appPath = path.join(cwd, 'src', 'App.vue')

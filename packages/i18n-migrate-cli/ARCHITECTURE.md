@@ -402,7 +402,8 @@ tmigrate restore --list
           "source": "vue-i18n",
           "named": "useI18n"
         },
-        "autoImport": true
+        "autoImport": true,
+        "skipCompilerMacros": ["defineProps", "defineEmits", "defineExpose", "defineOptions", "defineSlots", "defineModel", "withDefaults"]
       },
       "script": {
         "import": {
